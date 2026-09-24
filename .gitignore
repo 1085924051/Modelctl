@@ -1,0 +1,11 @@
+.modelctl/
+.runtime-check/
+node_modules/
+.venv/
+.runtime-real/
+.api-check/
+.runtime-smoke/
+*.log
+*.tmp
+__pycache__/
+*.pyc

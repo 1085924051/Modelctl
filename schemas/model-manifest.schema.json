@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/model-manifest/v1.json",
+  "title": "Local model manifest",
+  "description": "Declarative metadata for a model, its immutable artifacts, capabilities and runtime profiles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "version", "license", "runtime", "variants"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)+$",
+      "description": "Stable publisher/model identifier; it is not an HTTP path fragment."
+    },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "homepage": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "repository": { "type": "string", "format": "uri", "pattern": "^https://" }
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spdx"],
+      "properties": {
+        "spdx": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "weights": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "notice": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "version": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "adapter_protocol": { "type": "string", "pattern": "^v[0-9]+$" }
+      }
+    },
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/variant" },
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capability" },
+      "uniqueItems": true
+    },
+    "profiles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/profile" },
+      "uniqueItems": true
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["curated", "huggingface", "url", "local"] },
+        "revision": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://" }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Namespaced, non-executable metadata reserved for future tooling.",
+      "additionalProperties": { "type": ["object", "array", "string", "number", "boolean", "null"] }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "uri", "sha256", "size_bytes"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)(?:\\.\\.?)(?:/|$))(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+          "description": "Relative path within the prepared model directory."
+        },
+        "uri": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "media_type": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "executable": {
+          "const": false,
+          "description": "Model manifests may not install or execute arbitrary files."
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "artifacts"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "description": { "type": "string", "maxLength": 1000 },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/artifact" },
+          "uniqueItems": true
+        },
+        "default": { "type": "boolean", "default": false }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "input_schema", "output_schema", "streaming", "media"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]*$" },
+        "kind": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]*$" },
+        "input_schema": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "output_schema": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "streaming": { "type": "boolean" },
+        "media": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[^/\\s]+/[^\\s]+$" },
+          "uniqueItems": true
+        },
+        "max_concurrency": { "type": "integer", "minimum": 1 },
+        "max_input_bytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "device"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "device": { "enum": ["auto", "cpu", "cuda", "mps", "metal", "vulkan"] },
+        "platforms": {
+          "type": "array",
+          "items": { "enum": ["linux-x86_64", "linux-arm64", "macos-x86_64", "macos-arm64"] },
+          "uniqueItems": true
+        },
+        "memory_bytes": { "type": "integer", "minimum": 0 },
+        "disk_bytes": { "type": "integer", "minimum": 0 },
+        "max_concurrency": { "type": "integer", "minimum": 1 },
+        "config": {
+          "type": "object",
+          "description": "Declarative runtime values; shell commands and executable paths are forbidden.",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        }
+      }
+    }
+  }
+}
