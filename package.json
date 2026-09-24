@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node bin/modelctl.js daemon",
+    "setup": "node bin/modelctl.js setup",
     "catalog:validate": "node bin/modelctl.js catalog validate",
     "doctor": "node bin/modelctl.js doctor",
     "mcp": "node bin/modelctl-mcp.js"

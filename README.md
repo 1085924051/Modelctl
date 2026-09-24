@@ -10,23 +10,22 @@ Python adapter and is exposed through its native `/v1/systemone` protocol.
 ## Quick start
 
 ```bash
-bash scripts/setup-laya.sh
-export MODELCTL_PYTHON="$HOME/.modelctl/venv/bin/python"
-npm start
-# in another terminal
-node bin/modelctl.js doctor
-node bin/modelctl.js catalog validate
-node bin/modelctl.js catalog list
-node bin/modelctl.js inspect convaiinnovations/laya --variant english
-node bin/modelctl.js pull convaiinnovations/laya --variant english
-node bin/modelctl.js tasks
-node bin/modelctl.js cancel <task-id>
-node bin/modelctl.js run convaiinnovations/laya --variant english --profile cpu
-node bin/modelctl.js ps
-node bin/modelctl.js invoke <instance-id> system_one --json request.json
-node bin/modelctl.js stop <instance-id>
-node bin/modelctl.js remove convaiinnovations/laya --variant english --purge
+npm install -g .
+modelctl setup
+modelctl doctor
+modelctl catalog validate
+modelctl pull convaiinnovations/laya --variant english
+modelctl run convaiinnovations/laya --variant english --profile cpu
+modelctl ps
+modelctl invoke <instance-id> system_one --json request.json
+modelctl stop <instance-id>
+modelctl remove convaiinnovations/laya --variant english --purge
 ```
+
+`setup` is required once per machine. After it completes, modelctl discovers
+the private Python environment automatically, starts the local daemon on demand,
+waits for `pull` to finish, and pulls a missing variant automatically before
+`run`. Use `--detach` on `pull` when you want to poll the task yourself.
 
 `doctor` reports the detected Node/Python runtimes, host platform, catalog
 validity, memory, and profiles available on that host. It exits nonzero when a
@@ -48,14 +47,14 @@ Linux or macOS environment. The helper creates a private environment under
 
 ```bash
 bash scripts/setup-laya.sh
-export MODELCTL_PYTHON="$HOME/.modelctl/venv/bin/python"
 ```
 
-If you set a custom `MODELCTL_DATA_DIR`, use its `venv/bin/python` path instead.
+If you set a custom `MODELCTL_DATA_DIR`, modelctl looks for its managed
+environment under `$MODELCTL_DATA_DIR/venv`.
 
 The adapter only loads the verified local directory supplied by `modelctl`; it
-does not download floating revisions. Set `MODELCTL_PYTHON` when the Python
-executable is not `python3`.
+does not download floating revisions. Set `MODELCTL_PYTHON` only when you want
+to override the managed environment.
 
 On Windows development machines, use `scripts/setup-laya.ps1`; production
 support remains Linux/macOS.

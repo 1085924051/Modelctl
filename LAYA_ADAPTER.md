@@ -38,10 +38,11 @@ log, and reports adapter startup or exit errors through the instance resource.
 
 ## Runtime setup
 
-Run `scripts/setup-laya.sh` on Linux/macOS. It creates a private virtual
-environment in `$MODELCTL_DATA_DIR/venv` and installs `laya[serve]==0.3.18`.
-Set `MODELCTL_PYTHON` to that interpreter before starting the daemon. The
-Windows PowerShell helper is provided for development only.
+Run `modelctl setup` (or `scripts/setup-laya.sh`) on Linux/macOS. It creates a
+private virtual environment in `$MODELCTL_DATA_DIR/venv` and installs
+`laya[serve]==0.3.18`. modelctl discovers that interpreter automatically. Set
+`MODELCTL_PYTHON` only to override it. The Windows PowerShell helper is
+provided for development only.
 
 CUDA and MPS are explicit profiles in the catalog. The control plane checks the
 host platform before starting a profile. Actual driver, PyTorch build, memory,

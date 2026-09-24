@@ -13,9 +13,9 @@ node bin/modelctl.js daemon
 GET http://127.0.0.1:11435/health
 ```
 
-Install the Python environment with `scripts/setup-laya.sh`. It creates a
-private environment under `$MODELCTL_DATA_DIR/venv` and prints the
-`MODELCTL_PYTHON` value needed by the daemon.
+Install the Python environment with `modelctl setup` or
+`scripts/setup-laya.sh`. It creates a private environment under
+`$MODELCTL_DATA_DIR/venv`; modelctl discovers it automatically.
 
 ## Target machine verification
 

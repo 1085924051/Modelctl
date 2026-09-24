@@ -30,8 +30,8 @@ fi
 
 cat <<EOF
 Laya runtime installed.
-Use this environment with modelctl:
-  export MODELCTL_DATA_DIR="$DATA_DIR"
-  export MODELCTL_PYTHON="$VENV_DIR/bin/python"
-  node "$ROOT_DIR/bin/modelctl.js" daemon
+modelctl discovers this environment automatically at:
+  $VENV_DIR/bin/python
+After setup, run:
+  node "$ROOT_DIR/bin/modelctl.js" pull convaiinnovations/laya --variant english
 EOF

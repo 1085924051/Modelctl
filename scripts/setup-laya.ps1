@@ -22,6 +22,5 @@ $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 & $VenvPython -m pip install "laya[serve]==$LayaVersion"
 
 Write-Output "Laya runtime installed."
-Write-Output "Set MODELCTL_DATA_DIR=$DataDir"
-Write-Output "Set MODELCTL_PYTHON=$VenvPython"
-Write-Output "Then run: node `"$RootDir\bin\modelctl.js`" daemon"
+Write-Output "modelctl discovers this environment automatically at: $VenvPython"
+Write-Output "Then run: node `"$RootDir\bin\modelctl.js`" pull convaiinnovations/laya --variant english"
