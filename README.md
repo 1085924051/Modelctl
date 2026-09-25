@@ -39,6 +39,20 @@ unshared content-addressed artifacts.
 variant is about 843 MB; the multilingual variant is smaller in weights but has
 a larger tokenizer. Set `MODELCTL_DATA_DIR` to choose the local model store.
 
+## Local Web UI
+
+After starting the service (any CLI command starts it automatically), open
+`http://127.0.0.1:11435/` in a browser. The page provides:
+
+- model and variant download with live progress;
+- CPU/MPS/CUDA profile selection where the host supports it;
+- instance start, stop, device and health status;
+- a Laya judgment playground for `noul`, `choice`, and `score` questions;
+- raw JSON output for debugging and API integration.
+
+The Web UI is served by the local daemon and uses only loopback API calls. It
+does not add a separate frontend server or send model inputs to a third party.
+
 ## Laya runtime
 
 Install Python 3.10+, PyTorch, Laya, and the serving dependencies in the target

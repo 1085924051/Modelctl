@@ -2,7 +2,13 @@ import http from "node:http";
 import path from "node:path";
 import os from "node:os";
 import fsp from "node:fs/promises";
-import { ensureDirs, listCatalog, findManifest, findVariant, readState, updateState, jsonResponse, errorResponse, requestId, readJson, idFor, newId, apiError, pullModel, cancelPull, paths, safeId, startLaya, fetchHealth, stopProcess, isManagedProcess } from "./core.js";
+import { ensureDirs, listCatalog, findManifest, findVariant, readState, updateState, jsonResponse, errorResponse, requestId, readJson, idFor, newId, apiError, pullModel, cancelPull, paths, safeId, startLaya, fetchHealth, stopProcess, isManagedProcess, rootDir } from "./core.js";
+
+const webFiles = new Map([
+  ["/web/", ["index.html", "text/html; charset=utf-8"]],
+  ["/web/app.js", ["app.js", "text/javascript; charset=utf-8"]],
+  ["/web/styles.css", ["styles.css", "text/css; charset=utf-8"]],
+]);
 
 export async function createServer({ port = Number(process.env.MODELCTL_PORT || 11435), host = process.env.MODELCTL_HOST || "127.0.0.1" } = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("MODELCTL_PORT must be an integer between 0 and 65535");
@@ -26,6 +32,8 @@ export async function createServer({ port = Number(process.env.MODELCTL_PORT || 
 
 async function route(req, res, rid) {
   const url = new URL(req.url, "http://localhost"); const pathname = url.pathname;
+  if (req.method === "GET" && (pathname === "/" || pathname === "/web")) { res.writeHead(302, { location: "/web/", "cache-control": "no-store" }); res.end(); return; }
+  if (req.method === "GET" && webFiles.has(pathname)) return serveWeb(pathname, res);
   if (req.method === "GET" && pathname === "/health") return jsonResponse(res, 200, { status: "ok" });
   if (req.method === "GET" && pathname === "/v1/models") {
     const state = await readState(); const manifests = await listCatalog();
@@ -75,6 +83,20 @@ async function route(req, res, rid) {
   if (req.method === "POST" && opMatch) return invokeInstance(opMatch[1], opMatch[2], req, res);
   if (req.method === "POST" && pathname === "/v1/systemone") return invokeDefault(req, res);
   throw apiError(404, "NOT_FOUND", "route not found");
+}
+
+async function serveWeb(pathname, res) {
+  const [name, contentType] = webFiles.get(pathname);
+  const body = await fsp.readFile(path.join(rootDir, "web", name));
+  res.writeHead(200, {
+    "content-type": contentType,
+    "content-length": body.length,
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  });
+  res.end(body);
 }
 
 async function createPull(req, res) {
