@@ -12,6 +12,7 @@ export const catalogDir = path.join(rootDir, "catalog");
 let stateWriteQueue = Promise.resolve();
 const managedChildren = new Map();
 const pullLocks = new Map();
+const artifactLocks = new Map();
 const activePulls = new Map();
 
 export function dataRoot() {
@@ -195,7 +196,7 @@ async function download(url, destination, expected, expectedSize, onProgress, si
   if (resume) {
     const partial = await fsp.stat(temp);
     if (partial.size === expectedSize) {
-      if (await hashFile(temp) === expected) { await fsp.rename(temp, destination); return partial.size; }
+      if (await hashFile(temp) === expected) { await installVerifiedTemp(temp, destination, expected); return partial.size; }
       await fsp.rm(temp, { force: true });
       resume = false;
     } else if (partial.size > expectedSize) {
@@ -204,6 +205,16 @@ async function download(url, destination, expected, expectedSize, onProgress, si
     }
   }
   return downloadWithPython(url, destination, temp, expected, expectedSize, onProgress, resume, signal);
+}
+
+async function installVerifiedTemp(temp, destination, expected) {
+  try { await fsp.rename(temp, destination); }
+  catch (error) {
+    if (!(["EEXIST", "EPERM", "EACCES"].includes(error.code) && await exists(destination))) throw error;
+    if (await hashFile(destination) === expected) { await fsp.rm(temp, { force: true }); return; }
+    await fsp.rm(destination, { force: true });
+    await fsp.rename(temp, destination);
+  }
 }
 
 function downloadEnvironment() {
@@ -253,7 +264,7 @@ async function downloadWithPython(url, destination, temp, expected, expectedSize
   if (stat.size !== expectedSize) { await fsp.rm(temp, { force: true }); throw apiError(422, "ARTIFACT_SIZE_MISMATCH", `size mismatch for ${path.basename(destination)}`, { expected_size: expectedSize, actual_size: stat.size }); }
   const actual = await hashFile(temp);
   if (actual !== expected) { await fsp.rm(temp, { force: true }); throw apiError(422, "ARTIFACT_CORRUPT", `sha256 mismatch for ${path.basename(destination)}`, { expected_sha256: expected, actual_sha256: actual }); }
-  await fsp.rename(temp, destination);
+  await installVerifiedTemp(temp, destination, expected);
   return stat.size;
 }
 
@@ -270,6 +281,20 @@ export async function pullModel(manifest, variant, taskId) {
 
 export function cancelPull(taskId) { activePulls.get(taskId)?.abort(); }
 
+async function ensureArtifact(artifact, artifactStore, onProgress) {
+  const previous = artifactLocks.get(artifact.sha256) || Promise.resolve();
+  const current = previous.catch(() => undefined).then(async () => {
+    if (await exists(artifactStore)) {
+      if (await hashFile(artifactStore) === artifact.sha256) return;
+      await fsp.rm(artifactStore, { force: true });
+    }
+    await download(artifact.uri, artifactStore, artifact.sha256, artifact.size_bytes, onProgress);
+  });
+  artifactLocks.set(artifact.sha256, current);
+  current.finally(() => { if (artifactLocks.get(artifact.sha256) === current) artifactLocks.delete(artifact.sha256); }).catch(() => undefined);
+  return current;
+}
+
 async function pullModelUnlocked(manifest, variant, taskId, signal) {
   const p = paths(); const modelKey = `${safeId(manifest.id)}@${safeId(manifest.version)}`; const variantDir = path.join(p.models, modelKey, safeId(variant.id));
   await updateState((s) => { if (s.tasks[taskId]?.status === "cancelled" || signal.aborted) return; s.tasks[taskId] = { id: taskId, kind: "pull", status: "running", model_id: manifest.id, version: manifest.version, variant: variant.id, progress: { bytes_done: 0, bytes_total: variant.artifacts.reduce((n, a) => n + a.size_bytes, 0) }, started_at: new Date().toISOString(), updated_at: new Date().toISOString() }; });
@@ -280,7 +305,8 @@ async function pullModelUnlocked(manifest, variant, taskId, signal) {
       const target = path.join(variantDir, ...safeRelativePath(artifact.path).split("/")); const artifactStore = path.join(p.artifacts, artifact.sha256);
       let lastReported = 0;
       const reportProgress = async (n) => { if (n - lastReported >= 16 * 1024 * 1024 || n === artifact.size_bytes) { lastReported = n; await updateTask(taskId, { progress: { bytes_done: done + n, bytes_total: variant.artifacts.reduce((x, a) => x + a.size_bytes, 0) } }); } };
-      if (!(await exists(artifactStore)) || (await hashFile(artifactStore)) !== artifact.sha256) await download(artifact.uri, artifactStore, artifact.sha256, artifact.size_bytes, reportProgress, signal);
+      await ensureArtifact(artifact, artifactStore, reportProgress);
+      if (signal.aborted || (await readState()).tasks[taskId]?.status === "cancelled") throw apiError(499, "TASK_CANCELLED", "pull task cancelled");
       await fsp.mkdir(path.dirname(target), { recursive: true });
       if (await exists(target)) {
         if (await hashFile(target) !== artifact.sha256) await fsp.rm(target, { force: true });

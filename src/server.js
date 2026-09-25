@@ -77,6 +77,7 @@ async function route(req, res, rid) {
   if (req.method === "GET" && pathname === "/v1/instances") { const s = await readState(); return jsonResponse(res, 200, { items: Object.values(s.instances) }); }
   if (req.method === "GET" && pathname.startsWith("/v1/instances/")) { const s = await readState(); const i = s.instances[pathname.split("/")[3]]; if (!i) throw apiError(404, "INSTANCE_NOT_FOUND", "instance not found"); return jsonResponse(res, 200, i); }
   if (req.method === "POST" && pathname === "/v1/pulls") return createPull(req, res);
+  if (req.method === "POST" && pathname === "/v1/pulls/stream") return createPullStream(req, res);
   if (req.method === "POST" && pathname === "/v1/instances") return createInstance(req, res);
   if (req.method === "DELETE" && pathname.startsWith("/v1/instances/")) return stopInstance(pathname.split("/")[3], res);
   const opMatch = pathname.match(/^\/v1\/instances\/([^/]+)\/operations\/([^/]+)$/);
@@ -100,13 +101,40 @@ async function serveWeb(pathname, res) {
 }
 
 async function createPull(req, res) {
-  const body = objectBody(await readJson(req)); if (typeof body.model_id !== "string" || !body.model_id) throw apiError(400, "INVALID_REQUEST", "model_id is required"); const manifests = await listCatalog(); const m = findManifest(manifests, body.model_id, body.version); if (body.revision && body.revision !== m.source?.revision) throw apiError(409, "REVISION_MISMATCH", "requested revision does not match catalog revision"); const v = findVariant(m, body.variant); const taskId = newId("task");
+  const result = await startPull(objectBody(await readJson(req)));
+  return jsonResponse(res, 202, result);
+}
+
+async function startPull(body) {
+  if (typeof body.model_id !== "string" || !body.model_id) throw apiError(400, "INVALID_REQUEST", "model_id is required"); const manifests = await listCatalog(); const m = findManifest(manifests, body.model_id, body.version); if (body.revision && body.revision !== m.source?.revision) throw apiError(409, "REVISION_MISMATCH", "requested revision does not match catalog revision"); const v = findVariant(m, body.variant); const taskId = newId("task");
   const state = await readState();
   const duplicate = Object.values(state.tasks).find((task) => task.kind === "pull" && task.model_id === m.id && task.version === m.version && task.variant === v.id && ["queued", "running"].includes(task.status));
-  if (duplicate) throw apiError(409, "TASK_EXISTS", `pull already in progress: ${duplicate.id}`, { task_id: duplicate.id });
+  if (duplicate) return { task_id: duplicate.id, status: duplicate.status, poll: `/v1/tasks/${duplicate.id}`, shared: true };
   await updateState((s) => { s.tasks[taskId] = { id: taskId, kind: "pull", status: "queued", model_id: m.id, version: m.version, variant: v.id }; });
   void pullModel(m, v, taskId).catch(async (error) => { await updateState((s) => { if (s.tasks[taskId]) { s.tasks[taskId].status = "failed"; s.tasks[taskId].error = { code: error.code || "DOWNLOAD_FAILED", message: error.message }; } }); });
-  return jsonResponse(res, 202, { task_id: taskId, status: "queued", poll: `/v1/tasks/${taskId}` });
+  return { task_id: taskId, status: "queued", poll: `/v1/tasks/${taskId}` };
+}
+
+async function createPullStream(req, res) {
+  const task = await startPull(objectBody(await readJson(req)));
+  res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
+  let closed = false;
+  const write = (event) => { if (!closed && !res.destroyed) res.write(`${JSON.stringify(event)}\n`); };
+  const emit = async () => {
+    if (closed) return;
+    const current = (await readState()).tasks[task.task_id];
+    if (!current) { write({ status: "error", task_id: task.task_id, error: { code: "TASK_NOT_FOUND", message: "pull task disappeared" } }); res.end(); return; }
+    const progress = current.progress || {};
+    if (current.status === "queued") write({ status: "queued", task_id: task.task_id, variant: current.variant });
+    else if (current.status === "running") write({ status: "downloading", task_id: task.task_id, variant: current.variant, completed: progress.bytes_done || 0, total: progress.bytes_total || 0 });
+    else if (current.status === "succeeded") { write({ status: "success", task_id: task.task_id, completed: progress.bytes_done || 0, total: progress.bytes_total || 0 }); res.end(); return; }
+    else if (current.status === "cancelled") { write({ status: "cancelled", task_id: task.task_id, error: current.error || null }); res.end(); return; }
+    else if (current.status === "failed") { write({ status: "error", task_id: task.task_id, error: current.error || { code: "DOWNLOAD_FAILED", message: "pull failed" } }); res.end(); return; }
+    setTimeout(() => { void emit().catch((error) => { if (!closed) { write({ status: "error", task_id: task.task_id, error: { code: error.code || "INTERNAL_ERROR", message: error.message } }); res.end(); } }); }, 500);
+  };
+  req.on("close", () => { closed = true; });
+  write({ status: task.status, task_id: task.task_id, ...(task.shared ? { shared: true } : {}) });
+  await emit();
 }
 
 async function createInstance(req, res) {

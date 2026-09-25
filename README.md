@@ -38,6 +38,8 @@ unshared content-addressed artifacts.
 `pull` downloads and SHA-256 verifies the pinned Laya revision. The English
 variant is about 843 MB; the multilingual variant is smaller in weights but has
 a larger tokenizer. Set `MODELCTL_DATA_DIR` to choose the local model store.
+Concurrent pulls for the same model variant share one task and content-addressed
+artifact download instead of downloading the same bytes twice.
 
 Downloads use a content-addressed SHA-256 cache and resumable partial files.
 Transient HTTP failures (including 429 and 5xx responses) retry with exponential
@@ -99,6 +101,11 @@ support remains Linux/macOS.
 The daemon listens on `127.0.0.1:11435` by default. It provides health,
 catalog, pull-task, instance lifecycle, generic operation, and Jev-compatible
 `POST /v1/systemone` endpoints. See [API_CONTRACT.md](API_CONTRACT.md).
+
+Clients that want Ollama-style newline-delimited progress can send the same
+pull body to `POST /v1/pulls/stream`. Each line reports `queued`,
+`downloading` with `completed` and `total`, then `success`, `error`, or
+`cancelled`. Repeating a pull for the same variant joins the existing task.
 
 MCP and Skill integrations should call this API instead of reading the model
 store or starting adapters directly. See [ADAPTER_PROTOCOL.md](ADAPTER_PROTOCOL.md)
