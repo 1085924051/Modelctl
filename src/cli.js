@@ -150,7 +150,7 @@ async function doctor() {
   const manifests = await listCatalog();
   const platform = `${process.platform === "darwin" ? "macos" : process.platform}-${process.arch === "x64" ? "x86_64" : process.arch}`;
   const profiles = manifests.filter((m) => !m._invalid).flatMap((m) => (m.profiles || []).filter((profile) => !profile.platforms || profile.platforms.includes(platform)).map((profile) => `${m.id}:${profile.id}`));
-  const report = { node: { version: nodeVersion, supported: Number(nodeVersion.split(".")[0]) >= 20 }, python, platform, platform_supported: platform.startsWith("linux-") || platform.startsWith("macos-"), data_dir: dataRoot(), catalog_valid: manifests.every((m) => !m._invalid), supported_profiles: profiles, memory_bytes: os.totalmem() };
+  const report = { node: { version: nodeVersion, supported: Number(nodeVersion.split(".")[0]) >= 20 }, python, platform, platform_supported: platform.startsWith("linux-") || platform.startsWith("macos-"), data_dir: dataRoot(), catalog_valid: manifests.every((m) => !m._invalid), supported_profiles: profiles, memory_bytes: os.totalmem(), proxy: { http: !!(process.env.MODELCTL_HTTP_PROXY || process.env.HTTP_PROXY || process.env.http_proxy), https: !!(process.env.MODELCTL_HTTPS_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy), no_proxy: !!(process.env.MODELCTL_NO_PROXY || process.env.NO_PROXY || process.env.no_proxy) } };
   print(report);
   if (!report.node.supported || !report.python?.supported || !report.platform_supported || !report.catalog_valid) process.exitCode = 1;
 }

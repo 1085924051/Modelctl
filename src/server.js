@@ -19,7 +19,7 @@ export async function createServer({ port = Number(process.env.MODELCTL_PORT || 
       if (["preparing", "starting", "ready", "stopping"].includes(instance.status)) instance.status = "orphaned";
     }
     for (const task of Object.values(state.tasks)) {
-      if (["queued", "running"].includes(task.status)) { task.status = "failed"; task.error = { code: "DAEMON_RESTARTED", message: "daemon restarted before task completion" }; }
+      if (["queued", "running"].includes(task.status)) { task.status = "failed"; task.error = { code: "DAEMON_RESTARTED", message: "daemon restarted before task completion; a later pull will resume any partial artifact" }; }
     }
   });
   const server = http.createServer(async (req, res) => {

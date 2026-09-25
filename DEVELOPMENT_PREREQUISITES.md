@@ -13,6 +13,12 @@ node bin/modelctl.js daemon
 GET http://127.0.0.1:11435/health
 ```
 
+For restricted networks, configure `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY`
+before `pull`; Modelctl also accepts the higher-priority
+`MODELCTL_HTTPS_PROXY`, `MODELCTL_HTTP_PROXY`, and `MODELCTL_NO_PROXY` names.
+Artifact downloads retry transient failures and resume `.part` files after a
+cancel or daemon restart.
+
 Install the Python environment with `modelctl setup` or
 `scripts/setup-laya.sh`. It creates a private environment under
 `$MODELCTL_DATA_DIR/venv`; modelctl discovers it automatically.

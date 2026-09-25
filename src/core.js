@@ -194,36 +194,39 @@ async function download(url, destination, expected, expectedSize, onProgress, si
   let resume = await exists(temp);
   if (resume) {
     const partial = await fsp.stat(temp);
-    if (partial.size >= expectedSize) { await fsp.rm(temp, { force: true }); resume = false; }
+    if (partial.size === expectedSize) {
+      if (await hashFile(temp) === expected) { await fsp.rename(temp, destination); return partial.size; }
+      await fsp.rm(temp, { force: true });
+      resume = false;
+    } else if (partial.size > expectedSize) {
+      await fsp.rm(temp, { force: true });
+      resume = false;
+    }
   }
-  let response;
-  try { if (resume) throw Object.assign(new Error("resume with Python"), { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } }); response = await fetch(url, { redirect: "follow", signal }); }
-  catch (error) {
-    if (error.cause?.code !== "UND_ERR_CONNECT_TIMEOUT" && error.cause?.code !== "ENETUNREACH") throw error;
-    return downloadWithPython(url, destination, temp, expected, expectedSize, onProgress, resume, signal);
+  return downloadWithPython(url, destination, temp, expected, expectedSize, onProgress, resume, signal);
+}
+
+function downloadEnvironment() {
+  const env = { ...process.env };
+  const mapping = { MODELCTL_HTTP_PROXY: "HTTP_PROXY", MODELCTL_HTTPS_PROXY: "HTTPS_PROXY", MODELCTL_NO_PROXY: "NO_PROXY" };
+  for (const [source, target] of Object.entries(mapping)) {
+    if (env[source]) { env[target] = env[source]; env[target.toLowerCase()] = env[source]; }
   }
-  if (!response.ok || !response.body || !String(response.url || url).startsWith("https://")) throw apiError(502, "DOWNLOAD_FAILED", `download failed (${response.status}): ${url}`, undefined, true);
-  const total = Number(response.headers.get("content-length") || 0); let received = 0;
-  const out = fs.createWriteStream(temp); const hash = crypto.createHash("sha256");
-  try {
-    for await (const chunk of response.body) { if (signal?.aborted) throw apiError(499, "TASK_CANCELLED", "pull task cancelled"); const b = Buffer.from(chunk); received += b.length; if (expectedSize > 0 && received > expectedSize) throw apiError(422, "ARTIFACT_SIZE_MISMATCH", `download exceeded declared size for ${path.basename(destination)}`); hash.update(b); if (!out.write(b)) await new Promise((resolve) => out.once("drain", resolve)); await onProgress?.(received, total); }
-  } catch (error) {
-    await new Promise((resolve) => out.end(resolve));
-    await fsp.rm(temp, { force: true });
-    throw error;
+  for (const name of ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"]) {
+    const value = env[name] || env[name.toLowerCase()];
+    if (value) { env[name] = value; env[name.toLowerCase()] = value; }
   }
-  await new Promise((resolve) => out.end(resolve));
-  const actual = hash.digest("hex");
-  if (signal?.aborted) { await fsp.rm(temp, { force: true }); throw apiError(499, "TASK_CANCELLED", "pull task cancelled"); }
-  if (received !== expectedSize) { await fsp.rm(temp, { force: true }); throw apiError(422, "ARTIFACT_SIZE_MISMATCH", `size mismatch for ${path.basename(destination)}`, { expected_size: expectedSize, actual_size: received }); }
-  if (actual !== expected) { await fsp.rm(temp, { force: true }); throw apiError(422, "ARTIFACT_CORRUPT", `sha256 mismatch for ${path.basename(destination)}`, { expected_sha256: expected, actual_sha256: actual }); }
-  await fsp.rename(temp, destination); return received;
+  return env;
+}
+
+function sanitizeDownloadMessage(value) {
+  return String(value || "").replace(/(https?:\/\/)([^/@\s]+):([^/@\s]+)@/gi, "$1***:***@");
 }
 
 async function downloadWithPython(url, destination, temp, expected, expectedSize, onProgress, resume = false, signal) {
   const python = pythonExecutable();
   const helper = path.join(rootDir, "scripts", "download-artifact.py");
-  const child = spawn(python, [helper, url, temp, ...(resume ? ["--resume"] : [])], { stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(python, [helper, url, temp, ...(resume ? ["--resume"] : []), "--expected-size", String(expectedSize), "--retries", process.env.MODELCTL_DOWNLOAD_RETRIES || "6", "--connect-timeout", process.env.MODELCTL_DOWNLOAD_CONNECT_TIMEOUT || "30", "--read-timeout", process.env.MODELCTL_DOWNLOAD_READ_TIMEOUT || "30"], { env: downloadEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
   if (signal?.aborted) child.kill();
   signal?.addEventListener("abort", () => child.kill(), { once: true });
   let stderr = ""; let lines = "";
@@ -237,8 +240,15 @@ async function downloadWithPython(url, destination, temp, expected, expectedSize
   });
   const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); });
   await Promise.all(progressWrites);
-  if (signal?.aborted) { await fsp.rm(temp, { force: true }); throw apiError(499, "TASK_CANCELLED", "pull task cancelled"); }
-  if (code !== 0) throw apiError(502, "DOWNLOAD_FAILED", `Python download failed: ${stderr.trim() || code}`, undefined, true);
+  if (signal?.aborted) throw apiError(499, "TASK_CANCELLED", "pull task cancelled; partial download retained");
+  if (code !== 0) {
+    const marker = stderr.match(/MODELCTL_ERROR\s+([A-Z0-9_]+)\s+([^\r\n]*)/);
+    const errorCode = marker?.[1] || "DOWNLOAD_NETWORK_ERROR";
+    const message = sanitizeDownloadMessage(marker?.[2] || stderr.trim() || `Python download failed (${code})`);
+    const status = errorCode === "ARTIFACT_SIZE_MISMATCH" ? 422 : 502;
+    throw apiError(status, errorCode, message, undefined, true);
+  }
+  if (!(await exists(temp))) throw apiError(502, "DOWNLOAD_NETWORK_ERROR", "download helper produced no artifact", undefined, true);
   const stat = await fsp.stat(temp);
   if (stat.size !== expectedSize) { await fsp.rm(temp, { force: true }); throw apiError(422, "ARTIFACT_SIZE_MISMATCH", `size mismatch for ${path.basename(destination)}`, { expected_size: expectedSize, actual_size: stat.size }); }
   const actual = await hashFile(temp);

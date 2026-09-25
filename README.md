@@ -39,6 +39,27 @@ unshared content-addressed artifacts.
 variant is about 843 MB; the multilingual variant is smaller in weights but has
 a larger tokenizer. Set `MODELCTL_DATA_DIR` to choose the local model store.
 
+Downloads use a content-addressed SHA-256 cache and resumable partial files.
+Transient HTTP failures (including 429 and 5xx responses) retry with exponential
+backoff; cancelling a pull or losing the daemon keeps the `.part` file so the
+next pull can continue with an HTTP Range request. A model is marked installed
+only after its declared size and SHA-256 have been verified.
+
+The downloader follows the standard proxy variables used by Ollama:
+
+```bash
+export HTTPS_PROXY=http://127.0.0.1:7890
+export HTTP_PROXY=http://127.0.0.1:7890
+export NO_PROXY=127.0.0.1,localhost
+modelctl pull convaiinnovations/laya --variant english
+```
+
+`MODELCTL_HTTPS_PROXY`, `MODELCTL_HTTP_PROXY`, and `MODELCTL_NO_PROXY` take
+precedence when set. Proxy values are passed to the Python downloader without
+being written to task errors or `doctor` output. Use
+`MODELCTL_DOWNLOAD_RETRIES`, `MODELCTL_DOWNLOAD_CONNECT_TIMEOUT`, and
+`MODELCTL_DOWNLOAD_READ_TIMEOUT` to tune retry and timeout values.
+
 ## Local Web UI
 
 After starting the service (any CLI command starts it automatically), open
