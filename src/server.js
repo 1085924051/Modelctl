@@ -2,7 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import os from "node:os";
 import fsp from "node:fs/promises";
-import { ensureDirs, listCatalog, findManifest, findVariant, readState, updateState, jsonResponse, errorResponse, requestId, readJson, idFor, newId, apiError, pullModel, cancelPull, paths, safeId, startLaya, fetchHealth, stopProcess, isManagedProcess, rootDir } from "./core.js";
+import { ensureDirs, listCatalog, findManifest, findVariant, readState, updateState, jsonResponse, errorResponse, requestId, readJson, idFor, newId, apiError, pullModel, cancelPull, paths, safeId, startLaya, fetchHealth, stopProcess, isManagedProcess, rootDir, readSettings, writeSettings, readMcpConfig, writeMcpConfig, loadCommunityRegistry, sanitizeProxyUrl, downloadEnvironment } from "./core.js";
 
 const webFiles = new Map([
   ["/web/", ["index.html", "text/html; charset=utf-8"]],
@@ -24,17 +24,27 @@ export async function createServer({ port = Number(process.env.MODELCTL_PORT || 
   });
   const server = http.createServer(async (req, res) => {
     const rid = requestId(req); res.setHeader("x-request-id", rid);
-    try { await route(req, res, rid); } catch (error) { errorResponse(res, error, rid); }
+    try {
+      const address = server.address();
+      const serverHost = host.includes(":") ? `[${host}]` : host;
+      const baseUrl = process.env.MODELCTL_URL || `http://${serverHost}:${typeof address === "object" ? address.port : process.env.MODELCTL_PORT || 11435}`;
+      await route(req, res, rid, baseUrl);
+    } catch (error) { errorResponse(res, error, rid); }
   });
   await new Promise((resolve) => server.listen(port, host, resolve));
   return server;
 }
 
-async function route(req, res, rid) {
+async function route(req, res, rid, baseUrl) {
   const url = new URL(req.url, "http://localhost"); const pathname = url.pathname;
   if (req.method === "GET" && (pathname === "/" || pathname === "/web")) { res.writeHead(302, { location: "/web/", "cache-control": "no-store" }); res.end(); return; }
   if (req.method === "GET" && webFiles.has(pathname)) return serveWeb(pathname, res);
   if (req.method === "GET" && pathname === "/health") return jsonResponse(res, 200, { status: "ok" });
+  if (req.method === "GET" && pathname === "/v1/settings") return getSettings(res, baseUrl);
+  if (req.method === "PUT" && pathname === "/v1/settings") return putSettings(req, res, baseUrl);
+  if (req.method === "GET" && pathname === "/v1/community") return jsonResponse(res, 200, await loadCommunityRegistry());
+  if (req.method === "GET" && pathname === "/v1/mcp/config") return getMcpConfig(res, baseUrl);
+  if (req.method === "PUT" && pathname === "/v1/mcp/config") return putMcpConfig(req, res, baseUrl);
   if (req.method === "GET" && pathname === "/v1/models") {
     const state = await readState(); const manifests = await listCatalog();
     return jsonResponse(res, 200, { items: manifests.map((m) => m._invalid ? m : ({ id: m.id, version: m.version, revision: m.source?.revision, variants: m.variants.map((v) => v.id), installed_variants: Object.values(state.models).filter((x) => x.id === m.id && x.version === m.version).map((x) => x.variant), capabilities: (m.capabilities || []).map((x) => x.name), license: m.license?.spdx })) });
@@ -84,6 +94,54 @@ async function route(req, res, rid) {
   if (req.method === "POST" && opMatch) return invokeInstance(opMatch[1], opMatch[2], req, res);
   if (req.method === "POST" && pathname === "/v1/systemone") return invokeDefault(req, res);
   throw apiError(404, "NOT_FOUND", "route not found");
+}
+
+async function getSettings(res, baseUrl) {
+  const settings = await readSettings();
+  const downloadEnv = await downloadEnvironment();
+  const effectiveProxy = {
+    http: sanitizeProxyUrl(downloadEnv.HTTP_PROXY || downloadEnv.http_proxy || ""),
+    https: sanitizeProxyUrl(downloadEnv.HTTPS_PROXY || downloadEnv.https_proxy || ""),
+    all: sanitizeProxyUrl(downloadEnv.ALL_PROXY || downloadEnv.all_proxy || ""),
+    no_proxy: downloadEnv.NO_PROXY || downloadEnv.no_proxy || "",
+  };
+  const manifests = (await listCatalog()).filter((manifest) => !manifest._invalid);
+  const profileEntries = manifests.flatMap((manifest) => (manifest.profiles || []).filter((profile) => profileSupportsHost(manifest, profile.id)).map((profile) => [profile.id, profile]));
+  const profiles = [...new Map(profileEntries).values()];
+  return jsonResponse(res, 200, {
+    settings: { ...settings, proxy: Object.fromEntries(Object.entries(settings.proxy).map(([key, value]) => [key, key === "no_proxy" ? value : sanitizeProxyUrl(value)])) },
+    effective_proxy: effectiveProxy,
+    runtime: { data_dir: paths().root, daemon_url: baseUrl, supported_profiles: profiles.map((profile) => profile.id) },
+  });
+}
+
+async function putSettings(req, res, baseUrl) {
+  const body = objectBody(await readJson(req));
+  if (Object.keys(body).some((key) => !["proxy", "default_profile"].includes(key))) throw apiError(422, "SETTINGS_INVALID", "settings contains an unknown field");
+  if (body.default_profile !== undefined) {
+    const manifests = (await listCatalog()).filter((manifest) => !manifest._invalid);
+    const supported = manifests.some((manifest) => profileSupportsHost(manifest, body.default_profile));
+    if (!supported) throw apiError(422, "SETTINGS_INVALID", `default profile is not supported on ${hostPlatform()}`);
+  }
+  await writeSettings(body);
+  return getSettings(res, baseUrl);
+}
+
+async function getMcpConfig(res, baseUrl) {
+  const [registry, config] = await Promise.all([loadCommunityRegistry(), readMcpConfig()]);
+  const enabled = new Map(config.items.map((item) => [item.id, item.enabled]));
+  const items = registry.items.filter((item) => item.kind === "mcp").map((item) => ({ ...item, enabled: enabled.get(item.id) || false }));
+  return jsonResponse(res, 200, { schema_version: 1, items, recommended: { command: "modelctl-mcp", args: [], env: { MODELCTL_URL: baseUrl } } });
+}
+
+async function putMcpConfig(req, res, baseUrl) {
+  const body = objectBody(await readJson(req));
+  if (Object.keys(body).some((key) => !["schema_version", "items"].includes(key))) throw apiError(422, "MCP_CONFIG_INVALID", "MCP configuration contains an unknown field");
+  const config = await writeMcpConfig(body);
+  const registry = await loadCommunityRegistry();
+  const enabled = new Map(config.items.map((item) => [item.id, item.enabled]));
+  const items = registry.items.filter((item) => item.kind === "mcp").map((item) => ({ ...item, enabled: enabled.get(item.id) || false }));
+  return jsonResponse(res, 200, { schema_version: 1, items, recommended: { command: "modelctl-mcp", args: [], env: { MODELCTL_URL: baseUrl } } });
 }
 
 async function serveWeb(pathname, res) {
