@@ -73,3 +73,57 @@ func TestClientReturnsStructuredHTTPError(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestSystemOneRequestEncodesScoreLevelsAsArray(t *testing.T) {
+	request := SystemOneRequest{
+		State: State{Body: "The customer needs a refund."},
+		Questions: map[string]Question{
+			"department": {Type: "choice", Instructions: "Which team?", Criteria: map[string]string{"billing": "Payments", "support": "Technical help"}},
+			"priority":   {Type: "score", Instructions: "How urgent?", Criteria: []string{"Low", "Medium", "High"}},
+		},
+	}
+	payload, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Questions map[string]struct {
+			Criteria json.RawMessage `json:"criteria"`
+		} `json:"questions"`
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Questions["priority"].Criteria) == 0 || decoded.Questions["priority"].Criteria[0] != '[' {
+		t.Fatalf("score criteria must be an array: %s", decoded.Questions["priority"].Criteria)
+	}
+	if len(decoded.Questions["department"].Criteria) == 0 || decoded.Questions["department"].Criteria[0] != '{' {
+		t.Fatalf("choice criteria must be an object: %s", decoded.Questions["department"].Criteria)
+	}
+}
+
+func TestInvokeRawSystemOnePreservesConversationState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/instances/inst_1/operations/system_one" {
+			http.NotFound(w, r)
+			return
+		}
+		var body struct {
+			State     []map[string]string        `json:"state"`
+			Questions map[string]json.RawMessage `json:"questions"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.State) != 2 || len(body.Questions) != 1 {
+			t.Fatalf("raw request changed: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(SystemOneResponse{Answers: map[string]Answer{"urgent": {Type: "noul", Noul: 0.8}}})
+	}))
+	defer server.Close()
+	raw := json.RawMessage(`{"state":[{"role":"user","content":"refund"},{"role":"assistant","content":"checking"}],"questions":{"urgent":{"type":"noul","instructions":"Urgent?"}}}`)
+	result, err := NewClient(server.URL).InvokeRawSystemOne("inst_1", raw)
+	if err != nil || result.Answers["urgent"].Noul != 0.8 {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}

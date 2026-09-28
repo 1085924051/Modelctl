@@ -61,3 +61,34 @@ func readyInstances(instances []api.Instance) []api.Instance {
 	}
 	return ready
 }
+
+func activeInstances(instances []api.Instance) []api.Instance {
+	active := make([]api.Instance, 0, len(instances))
+	for _, instance := range instances {
+		if instance.Status == "ready" || instance.Status == "starting" || instance.Status == "stopping" {
+			active = append(active, instance)
+		}
+	}
+	return active
+}
+
+func mergeModelStates(previous, next []modelState) []modelState {
+	selected := make(map[string]modelState, len(previous))
+	for _, model := range previous {
+		selected[model.summary.ID] = model
+	}
+	for index := range next {
+		prior, found := selected[next[index].summary.ID]
+		if !found {
+			continue
+		}
+		next[index].variant = chooseVariant(next[index].detail.Variants, prior.variant)
+		for _, profile := range next[index].detail.Preflight.Profiles {
+			if profile.ID == prior.profile && profile.Supported {
+				next[index].profile = prior.profile
+				break
+			}
+		}
+	}
+	return next
+}

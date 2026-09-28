@@ -147,9 +147,9 @@ type State struct {
 }
 
 type Question struct {
-	Type         string            `json:"type"`
-	Instructions string            `json:"instructions"`
-	Criteria     map[string]string `json:"criteria,omitempty"`
+	Type         string `json:"type"`
+	Instructions string `json:"instructions"`
+	Criteria     any    `json:"criteria,omitempty"`
 }
 
 type SystemOneRequest struct {
@@ -162,6 +162,7 @@ type Answer struct {
 	Choice        string             `json:"choice,omitempty"`
 	Noul          float64            `json:"noul,omitempty"`
 	Score         any                `json:"score,omitempty"`
+	Legend        map[string]string  `json:"legend,omitempty"`
 	Confidence    float64            `json:"confidence,omitempty"`
 	Probabilities map[string]float64 `json:"probabilities,omitempty"`
 }
@@ -233,6 +234,13 @@ func (c *Client) StopInstance(instanceID string) (Instance, error) {
 }
 
 func (c *Client) InvokeSystemOne(instanceID string, request SystemOneRequest) (SystemOneResponse, error) {
+	var result SystemOneResponse
+	path := "/v1/instances/" + url.PathEscape(instanceID) + "/operations/system_one"
+	err := c.do(http.MethodPost, path, request, &result)
+	return result, err
+}
+
+func (c *Client) InvokeRawSystemOne(instanceID string, request json.RawMessage) (SystemOneResponse, error) {
 	var result SystemOneResponse
 	path := "/v1/instances/" + url.PathEscape(instanceID) + "/operations/system_one"
 	err := c.do(http.MethodPost, path, request, &result)

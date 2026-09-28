@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -23,15 +24,20 @@ type modelState struct {
 }
 
 type Desktop struct {
-	client       *api.Client
-	app          fyne.App
-	window       fyne.Window
-	page         *container.Scroll
-	status       *widget.Label
-	models       []modelState
-	instances    []api.Instance
-	selectedPage string
-	refreshMu    sync.Mutex
+	client         *api.Client
+	app            fyne.App
+	window         fyne.Window
+	page           *container.Scroll
+	status         *widget.Label
+	models         []modelState
+	instances      []api.Instance
+	selectedPage   string
+	refreshMu      sync.Mutex
+	playground     fyne.CanvasObject
+	instanceSelect *widget.Select
+	questionRows   []*questionEditor
+	questionList   *fyne.Container
+	result         *widget.RichText
 }
 
 func New(client *api.Client) *Desktop {
@@ -59,7 +65,7 @@ func (d *Desktop) layout() fyne.CanvasObject {
 		widget.NewButton("Running", func() { d.showPage("running") }),
 		widget.NewButton("Playground", func() { d.showPage("playground") }),
 		layout.NewSpacer(),
-		widget.NewLabel("127.0.0.1 daemon"),
+		widget.NewLabel(d.client.BaseURL()),
 	)
 	return container.NewBorder(header, nil, nav, nil, d.page)
 }
@@ -105,9 +111,10 @@ func (d *Desktop) refresh() {
 			states = append(states, modelState{summary: summary, detail: detail, variant: chooseVariant(detail.Variants, ""), profile: firstSupported(detail.Preflight.Profiles)})
 		}
 		fyne.Do(func() {
-			d.models = states
+			d.models = mergeModelStates(d.models, states)
 			d.instances = instances.Items
 			d.status.SetText(fmt.Sprintf("Connected · %d model(s) · %d ready instance(s)", len(states), len(readyInstances(instances.Items))))
+			d.updateInstanceSelect()
 			d.showPage(d.selectedPage)
 		})
 	}()
@@ -146,25 +153,42 @@ func (d *Desktop) modelCard(index int) fyne.CanvasObject {
 		variantIDs = append(variantIDs, variant.ID)
 	}
 	stateLabel := widget.NewLabel(modelStateText(model.summary, model.variant))
+	runningLabel := widget.NewLabel("")
+	updateRunning := func(variant string) {
+		runningLabel.SetText("")
+		for _, instance := range readyInstances(d.instances) {
+			if instance.Model.ID == model.summary.ID && instance.Model.Variant == variant {
+				runningLabel.SetText(fmt.Sprintf("Running on %s · %s", strings.ToUpper(instance.Device), instance.ID))
+				return
+			}
+		}
+	}
 	variantSelect := widget.NewSelect(variantIDs, func(selected string) {
 		model.variant = selected
 		stateLabel.SetText(modelStateText(model.summary, selected))
+		updateRunning(selected)
 	})
 	variantSelect.SetSelected(model.variant)
+	updateRunning(model.variant)
 	profileSelect := widget.NewSelect(supportedProfileIDs(model.detail.Preflight.Profiles), func(selected string) { model.profile = selected })
 	profileSelect.SetSelected(model.profile)
 	progress := widget.NewLabel("")
-	pull := widget.NewButton("Pull", func() { d.pull(model, progress, stateLabel) })
+	var pull *widget.Button
 	var run *widget.Button
+	pull = widget.NewButton("Pull", func() { d.pull(model, progress, stateLabel, pull, run) })
 	run = widget.NewButton("Run", func() { d.run(model, progress, stateLabel, pull, run) })
 	content := container.NewVBox(
-		widget.NewLabelWithStyle(model.detail.DisplayName, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewLabel(fmt.Sprintf("%s · v%s", model.summary.ID, model.summary.Version)),
 		stateLabel,
+		runningLabel,
 		container.NewGridWithColumns(2, widget.NewLabel("Variant"), variantSelect, widget.NewLabel("Device"), profileSelect),
 		container.NewHBox(pull, run, progress),
 	)
-	return widget.NewCard(model.detail.DisplayName, "Structured decision model", content)
+	name := model.detail.DisplayName
+	if name == "" {
+		name = model.summary.ID
+	}
+	return widget.NewCard(name, "Structured decision", content)
 }
 
 func modelStateText(model api.ModelSummary, variant string) string {
@@ -174,9 +198,13 @@ func modelStateText(model api.ModelSummary, variant string) string {
 	return "Not installed · Pull downloads the verified checkpoint"
 }
 
-func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label) {
+func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label, pull, run *widget.Button) {
+	request := api.PullRequest{ModelID: model.summary.ID, Version: model.summary.Version, Variant: model.variant}
+	pull.Disable()
+	run.Disable()
 	go func() {
-		result, err := d.client.Pull(api.PullRequest{ModelID: model.summary.ID, Version: model.summary.Version, Variant: model.variant})
+		defer fyne.Do(func() { pull.Enable(); run.Enable() })
+		result, err := d.client.Pull(request)
 		if err != nil {
 			fyne.Do(func() { progress.SetText(err.Error()) })
 			return
@@ -196,7 +224,11 @@ func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label) {
 				return
 			}
 			if task.Status == "failed" || task.Status == "cancelled" {
-				fyne.Do(func() { progress.SetText("Download " + task.Status) })
+				message := "Download " + task.Status
+				if task.Error != nil && task.Error.Message != "" {
+					message = task.Error.Message
+				}
+				fyne.Do(func() { progress.SetText(message) })
 				return
 			}
 			time.Sleep(750 * time.Millisecond)
@@ -205,17 +237,18 @@ func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label) {
 }
 
 func (d *Desktop) run(model *modelState, progress, stateLabel *widget.Label, pull, run *widget.Button) {
+	summary, variant, profile := model.summary, model.variant, model.profile
 	pull.Disable()
 	run.Disable()
 	go func() {
-		if !installedVariant(model.summary, model.variant) {
+		if !installedVariant(summary, variant) {
 			fyne.Do(func() { progress.SetText("Pulling before run…") })
-			if err := d.pullAndWait(model.summary, model.variant, func(text string) { fyne.Do(func() { progress.SetText(text) }) }); err != nil {
+			if err := d.pullAndWait(summary, variant, func(text string) { fyne.Do(func() { progress.SetText(text) }) }); err != nil {
 				fyne.Do(func() { progress.SetText(err.Error()); pull.Enable(); run.Enable() })
 				return
 			}
 		}
-		instance, err := d.client.StartInstance(api.StartInstanceRequest{ModelID: model.summary.ID, Version: model.summary.Version, Variant: model.variant, Profile: model.profile, Default: true})
+		instance, err := d.client.StartInstance(api.StartInstanceRequest{ModelID: summary.ID, Version: summary.Version, Variant: variant, Profile: profile, Default: true})
 		fyne.Do(func() {
 			pull.Enable()
 			run.Enable()
@@ -226,7 +259,9 @@ func (d *Desktop) run(model *modelState, progress, stateLabel *widget.Label, pul
 			stateLabel.SetText(fmt.Sprintf("Running · %s · %s", instance.Device, instance.ID[:minInt(12, len(instance.ID))]))
 			progress.SetText("Ready")
 		})
-		d.refresh()
+		if err == nil {
+			d.refresh()
+		}
 	}()
 }
 
@@ -245,6 +280,9 @@ func (d *Desktop) pullAndWait(summary api.ModelSummary, variant string, report f
 			return nil
 		}
 		if task.Status == "failed" || task.Status == "cancelled" {
+			if task.Error != nil && task.Error.Message != "" {
+				return fmt.Errorf("download %s: %s", task.Status, task.Error.Message)
+			}
 			return fmt.Errorf("download %s", task.Status)
 		}
 		time.Sleep(750 * time.Millisecond)
@@ -252,88 +290,47 @@ func (d *Desktop) pullAndWait(summary api.ModelSummary, variant string, report f
 }
 
 func (d *Desktop) renderRunning() {
+	active := activeInstances(d.instances)
 	box := container.NewVBox(widget.NewLabelWithStyle("Running", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-	if len(d.instances) == 0 {
+	if len(active) == 0 {
 		box.Add(widget.NewLabel("No running instances"))
 	}
-	for _, instance := range d.instances {
+	for _, instance := range active {
 		instance := instance
-		stop := widget.NewButton("Stop", func() { go func() { _, _ = d.client.StopInstance(instance.ID); d.refresh() }() })
-		box.Add(widget.NewCard(instance.Model.Variant, fmt.Sprintf("%s · %s", instance.Status, instance.Device), container.NewBorder(nil, nil, widget.NewLabel(instance.ID), stop)))
+		status := widget.NewLabel("")
+		stop := widget.NewButton("Stop", nil)
+		stop.OnTapped = func() {
+			stop.Disable()
+			status.SetText("Stopping…")
+			go func() {
+				_, err := d.client.StopInstance(instance.ID)
+				fyne.Do(func() {
+					if err != nil {
+						status.SetText(err.Error())
+						stop.Enable()
+						return
+					}
+					status.SetText("Stopped")
+				})
+				if err == nil {
+					d.refresh()
+				}
+			}()
+		}
+		line := fmt.Sprintf("%s · %s · %s", instance.Status, strings.ToUpper(instance.Device), instance.ID)
+		box.Add(widget.NewCard(instance.Model.Variant, instance.Model.ID, container.NewBorder(nil, nil, widget.NewLabel(line), stop, status)))
 	}
 	d.page.Content = box
 	d.page.Refresh()
 }
 
 func (d *Desktop) renderPlayground() {
-	ready := readyInstances(d.instances)
-	filtered := ready[:0]
-	for _, instance := range ready {
-		if len(instance.Capabilities) > 0 {
-			filtered = append(filtered, instance)
-		}
+	if d.playground == nil {
+		d.buildPlayground()
 	}
-	ready = filtered
-	instanceIDs := make([]string, 0, len(ready))
-	for _, instance := range ready {
-		instanceIDs = append(instanceIDs, instance.ID)
-	}
-	selectInstance := widget.NewSelect(instanceIDs, nil)
-	for _, instance := range ready {
-		if instance.Default {
-			selectInstance.SetSelected(instance.ID)
-			break
-		}
-	}
-	if selectInstance.Selected == "" && len(instanceIDs) > 0 {
-		selectInstance.SetSelected(instanceIDs[0])
-	}
-	body := widget.NewMultiLineEntry()
-	body.SetPlaceHolder("What should Laya decide?")
-	question := widget.NewEntry()
-	question.SetPlaceHolder("Question instructions")
-	typeSelect := widget.NewSelect([]string{"noul", "choice", "score"}, nil)
-	typeSelect.SetSelected("noul")
-	criteria := widget.NewMultiLineEntry()
-	criteria.SetPlaceHolder("choice: key: description, one per line")
-	result := widget.NewRichTextFromMarkdown("_No result yet._")
-	run := widget.NewButton("Run decision", func() {
-		if selectInstance.Selected == "" {
-			result.ParseMarkdown("_Start an instance first._")
-			return
-		}
-		request := api.SystemOneRequest{State: api.State{Body: body.Text}, Questions: map[string]api.Question{"decision": {Type: typeSelect.Selected, Instructions: question.Text}}}
-		if typeSelect.Selected == "choice" {
-			request.Questions["decision"] = api.Question{Type: "choice", Instructions: question.Text, Criteria: parseCriteria(criteria.Text)}
-		}
-		go func() {
-			response, err := d.client.InvokeSystemOne(selectInstance.Selected, request)
-			fyne.Do(func() {
-				if err != nil {
-					result.ParseMarkdown("**Error:** " + err.Error())
-					return
-				}
-				result.ParseMarkdown(formatResult(response))
-			})
-		}()
-	})
-	if len(ready) == 0 {
-		result.ParseMarkdown("_Start a ready Laya instance first._")
-	}
-	box := container.NewVBox(widget.NewLabelWithStyle("Playground", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), selectInstance, body, question, typeSelect, criteria, run, result)
-	d.page.Content = box
+	d.updateInstanceSelect()
+	d.page.Content = d.playground
 	d.page.Refresh()
-}
-
-func parseCriteria(text string) map[string]string {
-	result := map[string]string{}
-	for _, line := range strings.Split(text, "\n") {
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 2 {
-			result[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-		}
-	}
-	return result
 }
 
 func formatResult(result api.SystemOneResponse) string {
@@ -345,9 +342,31 @@ func formatResult(result api.SystemOneResponse) string {
 	var lines []string
 	for _, key := range keys {
 		answer := result.Answers[key]
-		lines = append(lines, fmt.Sprintf("### %s\n- type: `%s`\n- value: `%s`\n- confidence: %.2f", key, answer.Type, answerValue(answer), answer.Confidence))
+		lines = append(lines, fmt.Sprintf("### %s\n**%s** · %s", key, answerValue(answer), answer.Type))
+		if answer.Confidence > 0 {
+			lines = append(lines, fmt.Sprintf("Confidence: %.0f%%", answer.Confidence*100))
+		}
+		if len(answer.Probabilities) > 0 {
+			labels := make([]string, 0, len(answer.Probabilities))
+			for label := range answer.Probabilities {
+				labels = append(labels, label)
+			}
+			sort.Slice(labels, func(i, j int) bool { return answer.Probabilities[labels[i]] > answer.Probabilities[labels[j]] })
+			for _, label := range labels {
+				name := label
+				if legend := answer.Legend[label]; legend != "" {
+					name = legend
+				}
+				lines = append(lines, fmt.Sprintf("- %s: %.1f%%", name, answer.Probabilities[label]*100))
+			}
+		}
 	}
 	return strings.Join(lines, "\n\n")
+}
+
+func formatRawResult(result api.SystemOneResponse) string {
+	raw, _ := json.MarshalIndent(result, "", "  ")
+	return string(raw)
 }
 
 func answerValue(answer api.Answer) string {
