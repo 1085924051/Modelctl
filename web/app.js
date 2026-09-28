@@ -177,10 +177,11 @@ async function loadSettings() {
   try {
     state.settings = await api("/v1/settings");
     const settings = state.settings.settings;
-    $("setting-http").value = settings.proxy.http;
-    $("setting-https").value = settings.proxy.https;
-    $("setting-all").value = settings.proxy.all;
-    $("setting-no-proxy").value = settings.proxy.no_proxy;
+    const effective = state.settings.effective_proxy;
+    $("setting-http").value = settings.proxy.http || effective.http;
+    $("setting-https").value = settings.proxy.https || effective.https;
+    $("setting-all").value = settings.proxy.all || effective.all;
+    $("setting-no-proxy").value = settings.proxy.no_proxy || effective.no_proxy;
     const profile = $("setting-profile"); empty(profile);
     for (const id of state.settings.runtime.supported_profiles) profile.append(element("option", "", id.toUpperCase()));
     for (const option of profile.options) option.value = option.textContent.toLowerCase();
