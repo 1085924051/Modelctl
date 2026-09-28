@@ -61,6 +61,14 @@ test("proxy URL credentials are hidden", async () => {
   assert.equal(sanitizeProxyUrl("socks5://user@proxy.local:1080"), "socks5://***@proxy.local:1080");
 });
 
+test("saving a redacted proxy value preserves its stored credentials", async () => {
+  const { readSettings, writeSettings, sanitizeProxyUrl } = await import("../src/core.js");
+  await writeSettings({ proxy: { https: "http://user:secret@proxy.local:7897" } });
+  const masked = sanitizeProxyUrl((await readSettings()).proxy.https);
+  await writeSettings({ proxy: { https: masked } });
+  assert.equal((await readSettings()).proxy.https, "http://user:secret@proxy.local:7897");
+});
+
 test("download proxy uses modelctl env, then saved settings, then standard env", async () => {
   const { writeSettings, downloadEnvironment } = await import("../src/core.js");
   await writeSettings({ proxy: { http: "http://saved.local:7897", https: "http://saved.local:7897", all: "socks5://saved.local:7897", no_proxy: "localhost" } });

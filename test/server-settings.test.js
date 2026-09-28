@@ -75,6 +75,13 @@ test("community endpoint exposes the reviewed registry", async () => {
   assert.deepEqual(result.body.items[0].permissions, ["loopback:modelctl-api"]);
 });
 
+test("model preflight marks profiles supported on this host", async () => {
+  const result = await request("/v1/models/convaiinnovations%2Flaya");
+  assert.equal(result.status, 200);
+  const auto = result.body.preflight.profiles.find((profile) => profile.id === "auto");
+  assert.equal(auto.supported, true);
+});
+
 test("MCP config endpoint returns a client snippet and only saves known entries", async () => {
   const initial = await request("/v1/mcp/config");
   assert.equal(initial.status, 200);

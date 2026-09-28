@@ -117,7 +117,11 @@ function validateSettings(value) {
 
 export async function writeSettings(value) {
   const current = await readSettings();
-  const next = validateSettings({ ...current, ...value, proxy: { ...current.proxy, ...(value?.proxy || {}) } });
+  const proxy = { ...current.proxy, ...(value?.proxy || {}) };
+  for (const key of ["http", "https", "all"]) {
+    if (value?.proxy?.[key] === sanitizeProxyUrl(current.proxy[key]) && current.proxy[key] !== value.proxy[key]) proxy[key] = current.proxy[key];
+  }
+  const next = validateSettings({ ...current, ...value, proxy });
   await atomicWrite(paths().settings, next);
   return next;
 }
