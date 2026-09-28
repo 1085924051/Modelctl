@@ -279,6 +279,15 @@ func (d *Desktop) renderPlayground() {
 		instanceIDs = append(instanceIDs, instance.ID)
 	}
 	selectInstance := widget.NewSelect(instanceIDs, nil)
+	for _, instance := range ready {
+		if instance.Default {
+			selectInstance.SetSelected(instance.ID)
+			break
+		}
+	}
+	if selectInstance.Selected == "" && len(instanceIDs) > 0 {
+		selectInstance.SetSelected(instanceIDs[0])
+	}
 	body := widget.NewMultiLineEntry()
 	body.SetPlaceHolder("What should Laya decide?")
 	question := widget.NewEntry()
