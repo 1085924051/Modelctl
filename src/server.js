@@ -244,7 +244,7 @@ function profileSupportsHost(manifest, profile) {
 async function modelPreflight(manifest, state) {
   const freeBytes = await freeDiskBytes(paths().root);
   const variants = manifest.variants.map((variant) => ({ id: variant.id, installed: !!state.models[idFor(manifest.id, manifest.version, variant.id)], disk_bytes: variant.artifacts.reduce((sum, artifact) => sum + artifact.size_bytes, 0) }));
-  return { platform: hostPlatform(), memory_bytes: os.totalmem(), free_disk_bytes: freeBytes, profiles: (manifest.profiles || []).map((profile) => ({ id: profile.id, supported: profileSupportsHost(manifest, profile), device: profile.device })), variants };
+  return { platform: hostPlatform(), memory_bytes: os.totalmem(), free_disk_bytes: freeBytes, profiles: (manifest.profiles || []).map((profile) => ({ id: profile.id, supported: profileSupportsHost(manifest, profile.id), device: profile.device })), variants };
 }
 
 async function freeDiskBytes(directory) {
