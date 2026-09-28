@@ -1,6 +1,7 @@
 .modelctl/
 .runtime-check/
 node_modules/
+desktop/dist/
 .venv/
 .runtime-real/
 .api-check/
