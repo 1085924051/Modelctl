@@ -10,7 +10,7 @@
       "source": {
         "type": "repository",
         "url": "https://github.com/1085924051/Modelctl.git",
-        "revision": "cbaa378"
+        "revision": "cbaa378bdb181a7aad136eb60266e8332331497b"
       },
       "permissions": ["loopback:modelctl-api"],
       "configuration": {
