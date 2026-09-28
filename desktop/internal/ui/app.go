@@ -107,7 +107,7 @@ func (d *Desktop) refresh() {
 		fyne.Do(func() {
 			d.models = states
 			d.instances = instances.Items
-			d.status.SetText(fmt.Sprintf("Connected · %d model(s) · %d instance(s)", len(states), len(instances.Items)))
+			d.status.SetText(fmt.Sprintf("Connected · %d model(s) · %d ready instance(s)", len(states), len(readyInstances(instances.Items))))
 			d.showPage(d.selectedPage)
 		})
 	}()
@@ -145,11 +145,14 @@ func (d *Desktop) modelCard(index int) fyne.CanvasObject {
 	for _, variant := range model.detail.Variants {
 		variantIDs = append(variantIDs, variant.ID)
 	}
-	variantSelect := widget.NewSelect(variantIDs, func(selected string) { model.variant = selected })
+	stateLabel := widget.NewLabel(modelStateText(model.summary, model.variant))
+	variantSelect := widget.NewSelect(variantIDs, func(selected string) {
+		model.variant = selected
+		stateLabel.SetText(modelStateText(model.summary, selected))
+	})
 	variantSelect.SetSelected(model.variant)
 	profileSelect := widget.NewSelect(supportedProfileIDs(model.detail.Preflight.Profiles), func(selected string) { model.profile = selected })
 	profileSelect.SetSelected(model.profile)
-	stateLabel := widget.NewLabel(modelStateText(model.summary, model.variant))
 	progress := widget.NewLabel("")
 	pull := widget.NewButton("Pull", func() { d.pull(model, progress, stateLabel) })
 	var run *widget.Button
@@ -205,6 +208,13 @@ func (d *Desktop) run(model *modelState, progress, stateLabel *widget.Label, pul
 	pull.Disable()
 	run.Disable()
 	go func() {
+		if !installedVariant(model.summary, model.variant) {
+			fyne.Do(func() { progress.SetText("Pulling before run…") })
+			if err := d.pullAndWait(model.summary, model.variant, func(text string) { fyne.Do(func() { progress.SetText(text) }) }); err != nil {
+				fyne.Do(func() { progress.SetText(err.Error()); pull.Enable(); run.Enable() })
+				return
+			}
+		}
 		instance, err := d.client.StartInstance(api.StartInstanceRequest{ModelID: model.summary.ID, Version: model.summary.Version, Variant: model.variant, Profile: model.profile, Default: true})
 		fyne.Do(func() {
 			pull.Enable()
@@ -218,6 +228,27 @@ func (d *Desktop) run(model *modelState, progress, stateLabel *widget.Label, pul
 		})
 		d.refresh()
 	}()
+}
+
+func (d *Desktop) pullAndWait(summary api.ModelSummary, variant string, report func(string)) error {
+	result, err := d.client.Pull(api.PullRequest{ModelID: summary.ID, Version: summary.Version, Variant: variant})
+	if err != nil {
+		return err
+	}
+	for {
+		task, taskErr := d.client.Task(result.TaskID)
+		if taskErr != nil {
+			return taskErr
+		}
+		report(fmt.Sprintf("Downloading %d%%", progressPercent(task.Progress.BytesDone, task.Progress.BytesTotal)))
+		if task.Status == "succeeded" {
+			return nil
+		}
+		if task.Status == "failed" || task.Status == "cancelled" {
+			return fmt.Errorf("download %s", task.Status)
+		}
+		time.Sleep(750 * time.Millisecond)
+	}
 }
 
 func (d *Desktop) renderRunning() {
@@ -235,12 +266,14 @@ func (d *Desktop) renderRunning() {
 }
 
 func (d *Desktop) renderPlayground() {
-	ready := make([]api.Instance, 0)
-	for _, instance := range d.instances {
-		if instance.Status == "ready" && len(instance.Capabilities) > 0 {
-			ready = append(ready, instance)
+	ready := readyInstances(d.instances)
+	filtered := ready[:0]
+	for _, instance := range ready {
+		if len(instance.Capabilities) > 0 {
+			filtered = append(filtered, instance)
 		}
 	}
+	ready = filtered
 	instanceIDs := make([]string, 0, len(ready))
 	for _, instance := range ready {
 		instanceIDs = append(instanceIDs, instance.ID)

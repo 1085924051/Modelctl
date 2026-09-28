@@ -51,3 +51,13 @@ func installedVariant(model api.ModelSummary, variant string) bool {
 	}
 	return false
 }
+
+func readyInstances(instances []api.Instance) []api.Instance {
+	ready := make([]api.Instance, 0, len(instances))
+	for _, instance := range instances {
+		if instance.Status == "ready" {
+			ready = append(ready, instance)
+		}
+	}
+	return ready
+}

@@ -151,3 +151,19 @@ The English checkpoint has been downloaded, hash verified, and used for a
 real CPU `system_one` request in a Windows development environment. Linux and
 macOS target-machine validation remains open; see
 [DEVELOPMENT_PREREQUISITES.md](DEVELOPMENT_PREREQUISITES.md).
+
+## Native Go Desktop Client
+
+The repository also contains a native macOS MVP under `desktop/`. It uses
+Fyne for the desktop window and talks to the existing local daemon; it does not
+open the Web UI or start a second model runtime.
+
+```bash
+cd desktop
+./build-macos.sh
+open dist/Modelctl.app
+```
+
+Set `MODELCTL_URL` when the daemon is not using the default
+`http://127.0.0.1:11435`. The desktop MVP supports model variants, verified
+pulls, MPS/CPU instance lifecycle, and a structured Laya decision playground.

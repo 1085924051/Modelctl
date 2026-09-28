@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/1085924051/modelctl/desktop/internal/api"
@@ -43,5 +44,26 @@ func TestInstalledVariant(t *testing.T) {
 	model := api.ModelSummary{InstalledVariants: []string{"english", "multilingual"}}
 	if !installedVariant(model, "multilingual") || installedVariant(model, "missing") {
 		t.Fatal("installedVariant returned the wrong result")
+	}
+}
+
+func TestReadyInstancesIgnoresHistory(t *testing.T) {
+	instances := []api.Instance{{Status: "stopped"}, {Status: "ready", Model: api.ModelRef{Variant: "multilingual"}}, {Status: "failed"}}
+	if got := readyInstances(instances); len(got) != 1 || got[0].Model.Variant != "multilingual" {
+		t.Fatalf("readyInstances = %#v", got)
+	}
+}
+
+func TestModelStateTextTracksSelectedVariant(t *testing.T) {
+	model := api.ModelSummary{InstalledVariants: []string{"english"}}
+	if got := modelStateText(model, "multilingual"); !strings.HasPrefix(got, "Not installed") {
+		t.Fatalf("modelStateText = %q", got)
+	}
+}
+
+func TestParseCriteria(t *testing.T) {
+	got := parseCriteria("billing: refunds\nsupport: technical help")
+	if got["billing"] != "refunds" || got["support"] != "technical help" {
+		t.Fatalf("parseCriteria = %#v", got)
 	}
 }
