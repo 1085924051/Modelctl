@@ -33,6 +33,8 @@ export function paths() {
   return {
     root,
     state: path.join(root, "state.json"),
+    settings: path.join(root, "settings.json"),
+    mcp: path.join(root, "mcp.json"),
     artifacts: path.join(root, "artifacts", "sha256"),
     models: path.join(root, "models"),
     instances: path.join(root, "instances"),
@@ -58,6 +60,134 @@ export async function ensureDirs() {
   } else {
     await atomicWrite(p.state, { models: {}, tasks: {}, instances: {}, events: [] });
   }
+}
+
+export function defaultSettings() {
+  return { schema_version: 1, proxy: { http: "", https: "", all: "", no_proxy: "" }, default_profile: "auto" };
+}
+
+function defaultMcpConfig() { return { schema_version: 1, items: [] }; }
+
+export function sanitizeProxyUrl(value) {
+  if (!value) return "";
+  let url;
+  try { url = new URL(value); } catch { return "[invalid proxy URL]"; }
+  if (!url.username && !url.password) return value;
+  url.username = "***";
+  url.password = url.password ? "***" : "";
+  return url.toString().replace(/\/$/, "");
+}
+
+function configError(code, message) { return Object.assign(new Error(message), { code, status: 422 }); }
+
+function validateProxy(value, key) {
+  if (typeof value !== "string") throw configError("SETTINGS_INVALID", `proxy.${key} must be a string`);
+  if (!value) return "";
+  let url;
+  try { url = new URL(value); } catch { throw configError("SETTINGS_INVALID", `proxy.${key} must be a valid URL`); }
+  if (!["http:", "https:", "socks5:"].includes(url.protocol) || !url.hostname) throw configError("SETTINGS_INVALID", `proxy.${key} must use http, https, or socks5`);
+  return value;
+}
+
+export async function readSettings() {
+  await ensureDirs();
+  const file = paths().settings;
+  if (!(await exists(file))) return defaultSettings();
+  let value;
+  try { value = JSON.parse(await fsp.readFile(file, "utf8")); }
+  catch (error) { throw configError("SETTINGS_UNREADABLE", `settings file is not valid JSON: ${error.message}`); }
+  try { return validateSettings(value); }
+  catch (error) { if (error.code === "SETTINGS_INVALID") error.code = "SETTINGS_UNREADABLE"; throw error; }
+}
+
+function validateSettings(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw configError("SETTINGS_INVALID", "settings must be an object");
+  const allowed = new Set(["schema_version", "proxy", "default_profile"]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) throw configError("SETTINGS_INVALID", "settings contains an unknown field");
+  if (value.schema_version !== undefined && value.schema_version !== 1) throw configError("SETTINGS_INVALID", "unsupported settings schema_version");
+  const defaults = defaultSettings();
+  const proxy = { ...defaults.proxy, ...(value.proxy || {}) };
+  if (!value.proxy || typeof value.proxy !== "object" || Array.isArray(value.proxy) || Object.keys(value.proxy).some((key) => !Object.hasOwn(defaults.proxy, key))) throw configError("SETTINGS_INVALID", "proxy must contain only http, https, all, and no_proxy");
+  for (const key of ["http", "https", "all"]) proxy[key] = validateProxy(proxy[key], key);
+  if (typeof proxy.no_proxy !== "string") throw configError("SETTINGS_INVALID", "proxy.no_proxy must be a string");
+  const defaultProfile = value.default_profile ?? defaults.default_profile;
+  if (!["auto", "cpu", "cuda", "mps"].includes(defaultProfile)) throw configError("SETTINGS_INVALID", "default_profile must be auto, cpu, cuda, or mps");
+  return { schema_version: 1, proxy, default_profile: defaultProfile };
+}
+
+export async function writeSettings(value) {
+  const current = await readSettings();
+  const proxy = { ...current.proxy, ...(value?.proxy || {}) };
+  for (const key of ["http", "https", "all"]) {
+    if (value?.proxy?.[key] === sanitizeProxyUrl(current.proxy[key]) && current.proxy[key] !== value.proxy[key]) proxy[key] = current.proxy[key];
+  }
+  const next = validateSettings({ ...current, ...value, proxy });
+  await atomicWrite(paths().settings, next);
+  return next;
+}
+
+export async function readMcpConfig() {
+  await ensureDirs();
+  const file = paths().mcp;
+  if (!(await exists(file))) return defaultMcpConfig();
+  try { return validateMcpConfig(JSON.parse(await fsp.readFile(file, "utf8"))); }
+  catch (error) {
+    if (error.code === "MCP_CONFIG_INVALID") throw error;
+    throw configError("MCP_CONFIG_INVALID", `MCP configuration is unreadable: ${error.message}`);
+  }
+}
+
+function validateMcpConfig(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some((key) => !["schema_version", "items"].includes(key)) || value.schema_version !== 1 || !Array.isArray(value.items)) throw configError("MCP_CONFIG_INVALID", "MCP configuration must use schema_version 1 and an items array");
+  const seen = new Set();
+  for (const item of value.items) {
+    if (!item || typeof item !== "object" || Object.keys(item).some((key) => !["id", "enabled"].includes(key)) || typeof item.id !== "string" || typeof item.enabled !== "boolean" || seen.has(item.id)) throw configError("MCP_CONFIG_INVALID", "MCP config items require unique ids and boolean enabled values");
+    seen.add(item.id);
+  }
+  return { schema_version: 1, items: value.items.map(({ id, enabled }) => ({ id, enabled })) };
+}
+
+export async function writeMcpConfig(value) {
+  const next = validateMcpConfig({ schema_version: 1, ...value });
+  const registry = await loadCommunityRegistry();
+  const ids = new Set(registry.items.filter((item) => item.kind === "mcp").map((item) => item.id));
+  if (next.items.some((item) => !ids.has(item.id))) throw configError("MCP_CONFIG_INVALID", "MCP config references an unknown community entry");
+  await atomicWrite(paths().mcp, next);
+  return next;
+}
+
+export async function loadCommunityRegistry() {
+  const file = path.join(rootDir, "community", "index.json");
+  let registry;
+  try { registry = JSON.parse(await fsp.readFile(file, "utf8")); }
+  catch (error) { throw configError("COMMUNITY_INVALID", `community registry is unreadable: ${error.message}`); }
+  if (!registry || registry.schema_version !== 1 || !Array.isArray(registry.items)) throw configError("COMMUNITY_INVALID", "community registry must use schema_version 1 and an items array");
+  const seen = new Set();
+  for (const item of registry.items) {
+    if (!item || typeof item !== "object" || !/^[a-z0-9][a-z0-9._/-]*$/.test(item.id || "") || seen.has(item.id) || !["mcp", "skill", "adapter"].includes(item.kind) || !item.name || !item.version || !item.description || !Array.isArray(item.permissions) || item.permissions.some((permission) => typeof permission !== "string") || !item.source || typeof item.source.url !== "string" || typeof item.source.revision !== "string" || !item.source.revision) throw configError("COMMUNITY_INVALID", "community entry has invalid required metadata");
+    let source;
+    try { source = new URL(item.source.url); } catch { throw configError("COMMUNITY_INVALID", `invalid source URL for ${item.id}`); }
+    if (source.protocol !== "https:") throw configError("COMMUNITY_INVALID", `community source must use HTTPS: ${item.id}`);
+    if (item.configuration && (typeof item.configuration !== "object" || typeof item.configuration.command !== "string" || !Array.isArray(item.configuration.args) || item.configuration.args.some((arg) => typeof arg !== "string"))) throw configError("COMMUNITY_INVALID", `invalid configuration metadata for ${item.id}`);
+    seen.add(item.id);
+  }
+  return JSON.parse(JSON.stringify(registry));
+}
+
+export async function downloadEnvironment(env = process.env) {
+  const saved = await readSettings();
+  const result = { ...env };
+  const fields = [
+    ["http", "MODELCTL_HTTP_PROXY", "HTTP_PROXY", "http_proxy"],
+    ["https", "MODELCTL_HTTPS_PROXY", "HTTPS_PROXY", "https_proxy"],
+    ["all", "MODELCTL_ALL_PROXY", "ALL_PROXY", "all_proxy"],
+    ["no_proxy", "MODELCTL_NO_PROXY", "NO_PROXY", "no_proxy"],
+  ];
+  for (const [field, override, upper, lower] of fields) {
+    const value = env[override] || saved.proxy[field] || env[upper] || env[lower] || "";
+    if (value) { result[upper] = value; result[lower] = value; }
+  }
+  return result;
 }
 
 export async function exists(file) {
@@ -217,19 +347,6 @@ async function installVerifiedTemp(temp, destination, expected) {
   }
 }
 
-function downloadEnvironment() {
-  const env = { ...process.env };
-  const mapping = { MODELCTL_HTTP_PROXY: "HTTP_PROXY", MODELCTL_HTTPS_PROXY: "HTTPS_PROXY", MODELCTL_NO_PROXY: "NO_PROXY" };
-  for (const [source, target] of Object.entries(mapping)) {
-    if (env[source]) { env[target] = env[source]; env[target.toLowerCase()] = env[source]; }
-  }
-  for (const name of ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"]) {
-    const value = env[name] || env[name.toLowerCase()];
-    if (value) { env[name] = value; env[name.toLowerCase()] = value; }
-  }
-  return env;
-}
-
 function sanitizeDownloadMessage(value) {
   return String(value || "").replace(/(https?:\/\/)([^/@\s]+):([^/@\s]+)@/gi, "$1***:***@");
 }
@@ -237,7 +354,7 @@ function sanitizeDownloadMessage(value) {
 async function downloadWithPython(url, destination, temp, expected, expectedSize, onProgress, resume = false, signal) {
   const python = pythonExecutable();
   const helper = path.join(rootDir, "scripts", "download-artifact.py");
-  const child = spawn(python, [helper, url, temp, ...(resume ? ["--resume"] : []), "--expected-size", String(expectedSize), "--retries", process.env.MODELCTL_DOWNLOAD_RETRIES || "6", "--connect-timeout", process.env.MODELCTL_DOWNLOAD_CONNECT_TIMEOUT || "30", "--read-timeout", process.env.MODELCTL_DOWNLOAD_READ_TIMEOUT || "30"], { env: downloadEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(python, [helper, url, temp, ...(resume ? ["--resume"] : []), "--expected-size", String(expectedSize), "--retries", process.env.MODELCTL_DOWNLOAD_RETRIES || "6", "--connect-timeout", process.env.MODELCTL_DOWNLOAD_CONNECT_TIMEOUT || "30", "--read-timeout", process.env.MODELCTL_DOWNLOAD_READ_TIMEOUT || "30"], { env: await downloadEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
   if (signal?.aborted) child.kill();
   signal?.addEventListener("abort", () => child.kill(), { once: true });
   let stderr = ""; let lines = "";

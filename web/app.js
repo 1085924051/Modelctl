@@ -1,7 +1,7 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const state = { models: [], details: new Map(), instances: [], tasks: [], variants: new Map(), profiles: new Map(), refreshing: false, acting: false };
+const state = { models: [], details: new Map(), instances: [], tasks: [], variants: new Map(), profiles: new Map(), settings: null, community: null, mcp: null, refreshing: false, acting: false };
 const labels = { ready: "就绪", starting: "启动中", preparing: "准备中", stopping: "停止中", stopped: "已停止", failed: "失败", orphaned: "需清理", queued: "排队中", running: "进行中", succeeded: "已完成", cancelled: "已取消" };
 let toastTimer;
 
@@ -91,7 +91,7 @@ function renderModels() {
     const supported = detail.preflight?.profiles?.filter((profile) => profile.supported) || [];
     for (const profile of supported) { const option = element("option", "", profile.id.toUpperCase()); option.value = profile.id; profileSelect.append(option); }
     if (!supported.length) { const option = element("option", "", "当前平台不支持"); option.value = ""; profileSelect.append(option); profileSelect.disabled = true; }
-    const savedProfile = state.profiles.get(model.id);
+    const savedProfile = state.profiles.get(model.id) || state.settings?.settings?.default_profile;
     profileSelect.value = supported.some((profile) => profile.id === savedProfile) ? savedProfile : supported.find((profile) => profile.id === "auto")?.id || supported[0]?.id || "";
     profileSelect.addEventListener("change", () => state.profiles.set(model.id, profileSelect.value)); profileLabel.append(profileSelect); fields.append(profileLabel); card.append(fields);
     if (task) {
@@ -172,6 +172,140 @@ function doStart(modelId, variantId, profile) { return runAction(async () => {
   showToast(`实例已启动：${shortId(instance.id)}`);
 }); }
 function doStop(instanceId) { return runAction(async () => { await api(`/v1/instances/${encodeURIComponent(instanceId)}`, "DELETE"); showToast("实例已停止"); }); }
+
+async function loadSettings() {
+  try {
+    state.settings = await api("/v1/settings");
+    const settings = state.settings.settings;
+    $("setting-http").value = settings.proxy.http;
+    $("setting-https").value = settings.proxy.https;
+    $("setting-all").value = settings.proxy.all;
+    $("setting-no-proxy").value = settings.proxy.no_proxy;
+    const profile = $("setting-profile"); empty(profile);
+    for (const id of state.settings.runtime.supported_profiles) profile.append(element("option", "", id.toUpperCase()));
+    for (const option of profile.options) option.value = option.textContent.toLowerCase();
+    profile.value = settings.default_profile;
+    $("settings-data-dir").textContent = state.settings.runtime.data_dir;
+    $("settings-daemon-url").textContent = state.settings.runtime.daemon_url;
+    const proxy = state.settings.effective_proxy;
+    $("settings-effective-proxy").textContent = [proxy.http && `HTTP ${proxy.http}`, proxy.https && `HTTPS ${proxy.https}`, proxy.all && `ALL ${proxy.all}`, proxy.no_proxy && `NO_PROXY ${proxy.no_proxy}`].filter(Boolean).join(" · ") || "未配置";
+    $("settings-status").textContent = "";
+    renderModels();
+  } catch (error) {
+    $("settings-status").textContent = `无法读取设置：${error.message}`;
+  }
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  const button = $("settings-form").querySelector('[type="submit"]');
+  button.disabled = true;
+  $("settings-status").textContent = "正在保存…";
+  try {
+    state.settings = await api("/v1/settings", "PUT", {
+      proxy: {
+        http: $("setting-http").value.trim(),
+        https: $("setting-https").value.trim(),
+        all: $("setting-all").value.trim(),
+        no_proxy: $("setting-no-proxy").value.trim(),
+      },
+      default_profile: $("setting-profile").value,
+    });
+    $("settings-status").textContent = "已保存";
+    renderModels();
+    showToast("设置已保存");
+  } catch (error) {
+    $("settings-status").textContent = error.message;
+    showToast(error.message, true);
+  } finally { button.disabled = false; }
+}
+
+async function loadCommunity() {
+  const list = $("community-list");
+  try {
+    const [community, mcp] = await Promise.all([api("/v1/community"), api("/v1/mcp/config")]);
+    state.community = community;
+    state.mcp = mcp;
+    renderCommunity();
+    renderMcpConfig();
+  } catch (error) {
+    empty(list);
+    list.append(element("div", "empty-state", `无法读取社区目录：${error.message}`));
+  }
+}
+
+function renderCommunity() {
+  const list = $("community-list"); empty(list);
+  const items = state.community?.items || [];
+  $("community-count").textContent = `${items.length} 个条目`;
+  if (!items.length) { list.append(element("div", "empty-state", "社区目录暂无条目")); return; }
+  const enabled = new Map((state.mcp?.items || []).map((item) => [item.id, item.enabled]));
+  for (const item of items) {
+    const card = element("article", "community-card");
+    const head = element("div", "community-card-head");
+    const title = element("div", "community-title"); title.append(element("span", "community-kind", item.kind.toUpperCase()), element("h3", "", item.name));
+    head.append(title, element("span", "mini-tag", `v${item.version}`));
+    card.append(head, element("p", "community-description", item.description));
+    const source = element("a", "community-source", `${item.source.url} · ${item.source.revision}`); source.href = item.source.url; source.target = "_blank"; source.rel = "noreferrer"; card.append(source);
+    const permissions = element("div", "community-permissions");
+    for (const permission of item.permissions) permissions.append(element("span", "mini-tag", permission));
+    card.append(permissions);
+    if (item.kind === "mcp") {
+      const toggleLabel = element("label", "community-toggle");
+      const toggle = element("input"); toggle.type = "checkbox"; toggle.checked = enabled.get(item.id) || false; toggle.setAttribute("aria-label", `启用 ${item.name}`);
+      toggle.addEventListener("change", () => setMcpEnabled(item.id, toggle.checked));
+      toggleLabel.append(toggle, element("span", "", "加入 MCP 配置")); card.append(toggleLabel);
+    }
+    list.append(card);
+  }
+}
+
+async function setMcpEnabled(id, value) {
+  const previous = state.mcp;
+  const items = new Map((previous?.items || []).map((item) => [item.id, item.enabled]));
+  items.set(id, value);
+  try {
+    state.mcp = await api("/v1/mcp/config", "PUT", { items: [...items].map(([itemId, enabled]) => ({ id: itemId, enabled })) });
+    renderCommunity();
+    renderMcpConfig();
+    showToast(value ? "MCP 配置已启用" : "MCP 配置已停用");
+  } catch (error) {
+    state.mcp = previous;
+    renderCommunity();
+    showToast(error.message, true);
+  }
+}
+
+function renderMcpConfig() {
+  const recommended = state.mcp?.recommended;
+  if (!recommended) return;
+  const activeItems = state.mcp.items?.filter((item) => item.enabled) || [];
+  const servers = Object.fromEntries(activeItems.map((item) => [item.id.split("/").at(-1), recommended]));
+  $("mcp-config-output").value = JSON.stringify({ mcpServers: servers }, null, 2);
+  const active = activeItems.length;
+  $("mcp-enabled-status").textContent = active ? `${active} 个 MCP 项已加入配置` : "从社区页启用 MCP 项";
+}
+
+async function copyMcpConfig() {
+  try {
+    await navigator.clipboard.writeText($("mcp-config-output").value);
+    showToast("MCP 配置已复制");
+  } catch {
+    $("mcp-config-output").focus();
+    $("mcp-config-output").select();
+    showToast("无法访问剪贴板，请手动复制已选中的配置", true);
+  }
+}
+
+const routeLabels = { models: "模型管理", instances: "运行实例", playground: "判断工作台", community: "社区", settings: "设置" };
+async function navigateView() {
+  const route = location.hash.slice(1) || "models";
+  const selected = routeLabels[route] ? route : "models";
+  document.querySelectorAll(".side-nav a").forEach((link) => link.classList.toggle("active", link.hash === `#${selected}`));
+  $("breadcrumb-current").textContent = routeLabels[selected];
+  if (!state.settings) await loadSettings();
+  if (!state.community) await loadCommunity();
+}
 
 function addQuestion() {
   const list = $("question-list"); const index = list.children.length + 1;
@@ -259,6 +393,11 @@ $("service-address").textContent = location.host;
 $("refresh-button").addEventListener("click", refresh);
 $("add-question").addEventListener("click", addQuestion);
 $("decision-form").addEventListener("submit", submitDecision);
+$("settings-form").addEventListener("submit", saveSettings);
+$("copy-mcp-config").addEventListener("click", copyMcpConfig);
+window.addEventListener("hashchange", navigateView);
+if (!location.hash) history.replaceState(null, "", "#models");
 addQuestion();
 refresh();
+navigateView();
 setInterval(refresh, 2500);

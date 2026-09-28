@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "id": "modelctl/laya-system-one-mcp",
+      "kind": "mcp",
+      "name": "Laya System One MCP",
+      "version": "0.1.0",
+      "description": "Expose the local Laya system_one capability as an MCP tool.",
+      "source": {
+        "type": "repository",
+        "url": "https://github.com/1085924051/Modelctl.git",
+        "revision": "cbaa378bdb181a7aad136eb60266e8332331497b"
+      },
+      "permissions": ["loopback:modelctl-api"],
+      "configuration": {
+        "command": "modelctl-mcp",
+        "args": []
+      }
+    }
+  ]
+}

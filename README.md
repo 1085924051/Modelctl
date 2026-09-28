@@ -50,8 +50,8 @@ only after its declared size and SHA-256 have been verified.
 The downloader follows the standard proxy variables used by Ollama:
 
 ```bash
-export HTTPS_PROXY=http://127.0.0.1:7890
-export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7897
+export HTTP_PROXY=http://127.0.0.1:7897
 export NO_PROXY=127.0.0.1,localhost
 modelctl pull convaiinnovations/laya --variant english
 ```
@@ -75,6 +75,20 @@ After starting the service (any CLI command starts it automatically), open
 
 The Web UI is served by the local daemon and uses only loopback API calls. It
 does not add a separate frontend server or send model inputs to a third party.
+
+The sidebar opens model management, running instances, the structured decision
+playground, the community registry, and settings. Settings can persist proxy
+URLs and a default runtime profile under `$MODELCTL_DATA_DIR/settings.json`.
+Environment variables take precedence over saved proxy values. Values that
+contain proxy authentication are stored locally but shown without credentials.
+
+The Community page lists entries from the reviewed `community/index.json` file,
+including their source revision and declared permissions. Enabling an MCP item
+adds it to the configuration snippet on the Settings page; use **Copy MCP
+config** to paste it into the MCP client's own configuration. The snippet uses
+the installed `modelctl-mcp` command and the local daemon URL. Community entries
+are metadata in this release: browsing or enabling an entry does not download,
+install, or execute third-party code.
 
 ## Laya runtime
 
@@ -110,6 +124,10 @@ pull body to `POST /v1/pulls/stream`. Each line reports `queued`,
 MCP and Skill integrations should call this API instead of reading the model
 store or starting adapters directly. See [ADAPTER_PROTOCOL.md](ADAPTER_PROTOCOL.md)
 and [LAYA_ADAPTER.md](LAYA_ADAPTER.md).
+
+Local administration endpoints include `GET/PUT /v1/settings`,
+`GET /v1/community`, and `GET/PUT /v1/mcp/config`. See
+[API_CONTRACT.md](API_CONTRACT.md) for request and response shapes.
 
 For MCP clients, configure the stdio command `modelctl-mcp` (or
 `node bin/modelctl-mcp.js`). It exposes the `laya_system_one` tool and proxies

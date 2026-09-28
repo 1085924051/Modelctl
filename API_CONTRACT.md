@@ -39,6 +39,8 @@
 | 409 | `INSTANCE_AMBIGUOUS` / `TASK_EXISTS` | 当前状态不允许或选择不明确 |
 | 413 | `INPUT_TOO_LARGE` | 请求或媒体超过能力限制 |
 | 422 | `INVALID_OPERATION_INPUT` | 能力输入未通过 schema |
+| 422 | `SETTINGS_INVALID` / `MCP_CONFIG_INVALID` | 本地设置或 MCP 配置无效 |
+| 422 | `COMMUNITY_INVALID` | 社区目录无效 |
 | 429 | `RESOURCE_BUSY` | 并发或资源配额不足 |
 | 500 | `ADAPTER_ERROR` | 适配器内部错误 |
 | 502/503 | `WORKER_EXITED` / `SERVICE_UNAVAILABLE` | 模型进程退出或尚未就绪 |
@@ -89,6 +91,112 @@
 ### `GET /v1/models/{encoded_id}`
 
 返回清单、工件摘要、平台 profile、能力 schema 引用和安装状态。此请求不能把清单中的 URL 直接变成可执行命令。
+
+## 本地设置
+
+设置保存在 `$MODELCTL_DATA_DIR/settings.json`，只允许本机 loopback daemon 更新。缺少文件时使用默认值；损坏的 JSON 不会被覆盖。
+
+### `GET /v1/settings`
+
+返回脱敏的持久化设置、当前有效代理和只读运行信息：
+
+```json
+{
+  "settings": {
+    "schema_version": 1,
+    "proxy": {
+      "http": "http://127.0.0.1:7897",
+      "https": "http://127.0.0.1:7897",
+      "all": "",
+      "no_proxy": "127.0.0.1,localhost"
+    },
+    "default_profile": "auto"
+  },
+  "effective_proxy": {
+    "http": "http://127.0.0.1:7897",
+    "https": "http://127.0.0.1:7897",
+    "all": "",
+    "no_proxy": "127.0.0.1,localhost"
+  },
+  "runtime": {
+    "data_dir": "/Users/example/.modelctl",
+    "daemon_url": "http://127.0.0.1:11435",
+    "supported_profiles": ["auto", "cpu", "mps"]
+  }
+}
+```
+
+Proxy precedence is `MODELCTL_*` environment variable, saved setting, standard
+proxy environment variable, then empty. Proxy URLs with user information are
+returned with credentials masked. The CLI downloader receives the unmasked
+value locally; the daemon does not write it to task errors or logs.
+
+### `PUT /v1/settings`
+
+Only `proxy` and `default_profile` may be updated. Fields omitted from a partial
+proxy object keep their previous values.
+
+```json
+{
+  "proxy": {
+    "http": "http://127.0.0.1:7897",
+    "https": "http://127.0.0.1:7897",
+    "all": "",
+    "no_proxy": "127.0.0.1,localhost"
+  },
+  "default_profile": "auto"
+}
+```
+
+Supported proxy schemes are `http`, `https`, and `socks5`. Changes to saved
+proxy values affect subsequent downloads; profile changes affect subsequent
+instance starts. `data_dir` and `daemon_url` are read-only.
+
+## Community and MCP configuration
+
+`GET /v1/community` returns the validated, read-only `community/index.json`
+registry. Entries declare a kind (`mcp`, `skill`, or `adapter`), HTTPS source,
+pinned revision, version, permissions, and optional display configuration.
+These entries are metadata only. The daemon never turns them into shell
+commands.
+
+### `GET /v1/mcp/config`
+
+Returns the reviewed MCP entries with their local enabled state and a
+recommended client command:
+
+```json
+{
+  "schema_version": 1,
+  "items": [
+    { "id": "modelctl/laya-system-one-mcp", "enabled": true }
+  ],
+  "recommended": {
+    "command": "modelctl-mcp",
+    "args": [],
+    "env": { "MODELCTL_URL": "http://127.0.0.1:11435" }
+  }
+}
+```
+
+### `PUT /v1/mcp/config`
+
+Saves enabled state for known MCP entries. Only `id` and boolean `enabled`
+fields are accepted; callers cannot supply executable paths, arguments, or
+environment variable values.
+
+```json
+{
+  "schema_version": 1,
+  "items": [
+    { "id": "modelctl/laya-system-one-mcp", "enabled": true }
+  ]
+}
+```
+
+The Web UI generates a JSON snippet for the MCP client's own configuration.
+It does not modify external client configuration files or install community
+software.
 
 ## 任务
 
