@@ -164,6 +164,20 @@ cd desktop
 open dist/Modelctl.app
 ```
 
+To create a versioned macOS arm64 distribution package:
+
+```bash
+cd desktop
+./release-macos.sh
+```
+
+This produces a DMG, ZIP, and SHA-256 file under `desktop/dist/`. The current
+local build is ad-hoc signed because a Developer ID certificate is not stored
+on the development machine; public distribution requires signing with
+`MODELCTL_SIGNING_IDENTITY` and Apple notarization. The app is a client and
+requires the Modelctl daemon, runtime, and selected model to be installed
+separately.
+
 Set `MODELCTL_URL` when the daemon is not using the default
 `http://127.0.0.1:11435`. The desktop MVP supports model variants, verified
 pulls, MPS/CPU instance lifecycle, and a structured Laya decision playground.

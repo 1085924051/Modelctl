@@ -17,6 +17,19 @@ cd desktop
 open dist/Modelctl.app
 ```
 
+To create distributable artifacts:
+
+```bash
+cd desktop
+./release-macos.sh
+```
+
+This creates a versioned ZIP, DMG, and SHA-256 file under `desktop/dist/`.
+The package is client-only and requires the Modelctl daemon and runtime to be
+installed separately. Without `MODELCTL_SIGNING_IDENTITY`, the local package
+uses an ad-hoc signature; public distribution requires a Developer ID
+certificate and notarization.
+
 The client uses the daemon API only. It does not start a browser or a Python
 runtime. The daemon must already be running; the default endpoint is
 `http://127.0.0.1:11435`.

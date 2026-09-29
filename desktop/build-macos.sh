@@ -4,6 +4,8 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP="$ROOT/dist/Modelctl.app"
 BIN="$APP/Contents/MacOS/modelctl-desktop"
+VERSION="${MODELCTL_DESKTOP_VERSION:-0.1.0}"
+ARCH="${MODELCTL_GOARCH:-arm64}"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -22,9 +24,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>__MODELCTL_VERSION__</string>
 	<key>CFBundleVersion</key>
-	<string>0.1.0</string>
+	<string>__MODELCTL_VERSION__</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
@@ -33,6 +35,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
+sed -i '' "s/__MODELCTL_VERSION__/$VERSION/g" "$APP/Contents/Info.plist"
+
 cd "$ROOT"
-go build -o "$BIN" .
+GOOS=darwin GOARCH="$ARCH" CGO_ENABLED=1 go build -o "$BIN" .
 echo "$APP"
