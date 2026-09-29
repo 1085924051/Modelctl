@@ -2,6 +2,7 @@
 .runtime-check/
 node_modules/
 desktop/dist/
+desktop/fyne-cross/
 .venv/
 .runtime-real/
 .api-check/

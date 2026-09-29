@@ -17,6 +17,42 @@ cd desktop
 open dist/Modelctl.app
 ```
 
+## Windows and Linux packages
+
+Cross-building the GUI apps uses Docker and Fyne's pinned cross-build images.
+Install `fyne-cross` once:
+
+```bash
+go install github.com/fyne-io/fyne-cross@v1.6.2
+```
+
+Then build Windows x64 and Linux x86_64 packages:
+
+```bash
+./release-cross.sh
+```
+
+Packages and `SHA256SUMS` are written to `desktop/dist/release/`. If Docker
+cannot reach the internet directly, set container-reachable proxy values, for
+example on this Mac:
+
+```bash
+FYNE_CROSS_HTTP_PROXY=http://host.docker.internal:7897 \
+FYNE_CROSS_HTTPS_PROXY=http://host.docker.internal:7897 \
+./release-cross.sh
+```
+
+If the Docker VM cannot keep both cross-compiler images at once, build each
+target separately with `fyne-cross` and then stage the packages with
+`MODELCTL_CROSS_SKIP_BUILD=1 ./release-cross.sh`. The official repository
+workflow also builds Windows/Linux packages on a clean Linux runner.
+
+Windows and Linux packages contain the client only. Windows builds are unsigned;
+Linux builds target x86_64 and require an X11/OpenGL desktop runtime. Use the
+packaged platform README for installation steps. GitHub Actions also runs the
+cross-build on this branch and exposes the packages as a downloadable workflow
+artifact.
+
 To create distributable artifacts:
 
 ```bash

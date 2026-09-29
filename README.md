@@ -147,6 +147,20 @@ The catalog is pinned to Laya revision
 `cf7c54c0586eede67d827dfaab8cd2d2007273e`; artifact metadata is in
 `catalog/laya-0.3.18.json`.
 
+## Desktop Packages
+
+The Go/Fyne client source is under `desktop/`. macOS Apple Silicon builds use
+`desktop/release-macos.sh`; Windows x64 and Linux x86_64 packages use
+`desktop/release-cross.sh` with Docker and `fyne-cross` installed. Packages and
+checksums are written under `desktop/dist/release/`. See
+[`desktop/README.md`](desktop/README.md) for platform prerequisites and
+installation steps. These packages contain the client only; install the
+Modelctl daemon/runtime and model separately.
+
+Application planning for finance research, embodied decision support, and
+LLM/VLM/vLLM preprocessing is documented in
+[`docs/plans/laya-jev-real-world-applications.md`](docs/plans/laya-jev-real-world-applications.md).
+
 The English checkpoint has been downloaded, hash verified, and used for a
 real CPU `system_one` request in a Windows development environment. Linux and
 macOS target-machine validation remains open; see
