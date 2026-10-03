@@ -5,11 +5,16 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP="$ROOT/dist/Modelctl.app"
 BIN="$APP/Contents/MacOS/modelctl-desktop"
 RESOURCES="$APP/Contents/Resources"
+RUNTIME_ROOT="${MODELCTL_RUNTIME_ROOT:-$ROOT/dist/runtime/macos-arm64}"
 ICONSET="$ROOT/dist/.Modelctl.iconset"
 VERSION="${MODELCTL_DESKTOP_VERSION:-0.1.0}"
 ARCH="${MODELCTL_GOARCH:-arm64}"
 
 mkdir -p "$APP/Contents/MacOS" "$RESOURCES"
+if [ ! -f "$RUNTIME_ROOT/runtime-manifest.json" ]; then
+  echo "A verified macOS runtime is required at $RUNTIME_ROOT" >&2
+  exit 2
+fi
 if [ ! -f "$ROOT/Icon.png" ]; then (cd "$ROOT" && go run ./tools/generate_icon.go); fi
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -54,4 +59,6 @@ rm -rf "$ICONSET"
 
 cd "$ROOT"
 GOOS=darwin GOARCH="$ARCH" CGO_ENABLED=1 go build -o "$BIN" .
+rm -rf "$RESOURCES/runtime"
+cp -R "$RUNTIME_ROOT" "$RESOURCES/runtime"
 echo "$APP"

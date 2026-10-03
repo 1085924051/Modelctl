@@ -36,6 +36,10 @@ jobs:
           else
             export MODELCTL_DESKTOP_VERSION="0.1.0"
           fi
+          if [ ! -f desktop/dist/runtime/windows-amd64/runtime-manifest.json ] || [ ! -f desktop/dist/runtime/linux-amd64/runtime-manifest.json ]; then
+            echo "This cross package job requires prebuilt Windows/Linux runtime artifacts. Use desktop-runtime-build.yml first and place them under desktop/dist/runtime/."
+            exit 2
+          fi
           ./desktop/release-cross.sh
       - uses: actions/upload-artifact@v4
         with:

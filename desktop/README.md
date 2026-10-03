@@ -47,11 +47,11 @@ target separately with `fyne-cross` and then stage the packages with
 `MODELCTL_CROSS_SKIP_BUILD=1 ./release-cross.sh`. The official repository
 workflow also builds Windows/Linux packages on a clean Linux runner.
 
-Windows and Linux packages contain the client only. Windows builds are unsigned;
-Linux builds target x86_64 and require an X11/OpenGL desktop runtime. Use the
-packaged platform README for installation steps. GitHub Actions also runs the
-cross-build on this branch and exposes the packages as a downloadable workflow
-artifact.
+Windows and Linux packages include the client, daemon, Node/Python/Laya runtime,
+and a verified runtime manifest. Model weights remain separate and download on
+first use. Windows builds are unsigned; Linux builds target x86_64 and require
+an X11/OpenGL desktop runtime. Use the packaged platform README for installation
+steps.
 
 To create distributable artifacts:
 
@@ -61,14 +61,9 @@ cd desktop
 ```
 
 This creates a versioned ZIP, DMG, and SHA-256 file under `desktop/dist/`.
-The package is client-only and requires the Modelctl daemon and runtime to be
-installed separately. Without `MODELCTL_SIGNING_IDENTITY`, the local package
-uses an ad-hoc signature; public distribution requires a Developer ID
-certificate and notarization.
-
-The client uses the daemon API only. It does not start a browser or a Python
-runtime. The daemon must already be running; the default endpoint is
-`http://127.0.0.1:11435`.
+The package includes and supervises its local daemon and Python runtime. Without
+`MODELCTL_SIGNING_IDENTITY`, the local package uses an ad-hoc signature; public
+distribution requires a Developer ID certificate and notarization.
 
 ## Decisions
 

@@ -43,6 +43,13 @@ if [ "${MODELCTL_CROSS_SKIP_BUILD:-0}" != "1" ]; then
   build_target linux amd64
 fi
 
+for target in windows-amd64 linux-amd64; do
+  if [ ! -f "$DIST/runtime/$target/runtime-manifest.json" ]; then
+    echo "A verified $target runtime is required at $DIST/runtime/$target" >&2
+    exit 2
+  fi
+done
+
 WINDOWS_STAGE="$STAGE/Modelctl-Windows-x64"
 mkdir -p "$WINDOWS_STAGE"
 unzip -q -o "$ROOT/fyne-cross/dist/windows-amd64/Modelctl.zip" -d "$WINDOWS_STAGE"
@@ -50,6 +57,7 @@ cp "$ROOT/packaging/README-windows.txt" "$WINDOWS_STAGE/README.txt"
 cp "$ROOT/RELEASE_NOTES.md" "$WINDOWS_STAGE/RELEASE_NOTES.txt"
 cp "$ROOT/packaging/Start-Modelctl.ps1" "$WINDOWS_STAGE/Start-Modelctl.ps1"
 cp "$ROOT/packaging/Start-Modelctl.cmd" "$WINDOWS_STAGE/Start-Modelctl.cmd"
+cp -R "$DIST/runtime/windows-amd64" "$WINDOWS_STAGE/runtime"
 WINDOWS_PACKAGE="$RELEASE/Modelctl-windows-x64-v${VERSION}.zip"
 (cd "$STAGE" && zip -qry "$WINDOWS_PACKAGE" "Modelctl-Windows-x64")
 
@@ -60,6 +68,7 @@ cp "$ROOT/packaging/README-linux.txt" "$LINUX_STAGE/README.txt"
 cp "$ROOT/RELEASE_NOTES.md" "$LINUX_STAGE/RELEASE_NOTES.txt"
 cp "$ROOT/packaging/install-linux.sh" "$LINUX_STAGE/install.sh"
 chmod 755 "$LINUX_STAGE/install.sh"
+cp -R "$DIST/runtime/linux-amd64" "$LINUX_STAGE/runtime"
 LINUX_PACKAGE="$RELEASE/Modelctl-linux-x86_64-v${VERSION}.tar.xz"
 tar -cJf "$LINUX_PACKAGE" -C "$STAGE" "Modelctl-Linux-x86_64"
 

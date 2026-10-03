@@ -1,0 +1,75 @@
+name: Desktop self-contained runtimes
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Runtime package version
+        required: true
+        default: "0.1.0"
+  push:
+    branches: [codex/go-desktop-mvp]
+    tags: ["desktop-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: darwin-arm64
+          - os: windows-2025
+            target: windows-amd64
+          - os: ubuntu-24.04
+            target: linux-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      - name: Install runtime dependencies
+        shell: bash
+        run: |
+          python -m venv --copies .runtime-venv
+          .runtime-venv/bin/python -m pip install --upgrade pip
+          .runtime-venv/bin/python -m pip install -r desktop/runtime/requirements/${{ matrix.target }}.in
+      - name: Build runtime tree on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          NODE_BINARY="$(realpath "$(command -v node)")"
+          NODE_ROOT="$(cd "$(dirname "$NODE_BINARY")/.." && pwd)"
+          MODELCTL_RUNTIME_TARGET="${{ matrix.target }}" \
+          MODELCTL_NODE_BINARY="$NODE_BINARY" \
+          MODELCTL_NODE_ROOT="$NODE_ROOT" \
+          MODELCTL_PYTHON_BINARY="$PWD/.runtime-venv/bin/python" \
+          MODELCTL_PYTHON_ROOT="$PWD/.runtime-venv" \
+          MODELCTL_RUNTIME_OUTPUT="$PWD/desktop/dist/runtime/${{ matrix.target }}" \
+          ./desktop/runtime/build-runtime.sh
+      - name: Build runtime tree on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $node = (Get-Command node).Source
+          $nodeRoot = Split-Path (Split-Path $node -Parent) -Parent
+          $env:MODELCTL_RUNTIME_TARGET = '${{ matrix.target }}'
+          $env:MODELCTL_NODE_BINARY = $node
+          $env:MODELCTL_NODE_ROOT = $nodeRoot
+          $env:MODELCTL_PYTHON_BINARY = "$(Resolve-Path .runtime-venv\Scripts\python.exe)"
+          $env:MODELCTL_PYTHON_ROOT = "$(Resolve-Path .runtime-venv)"
+          $env:MODELCTL_RUNTIME_OUTPUT = "$(Resolve-Path desktop\dist\runtime)\${{ matrix.target }}"
+          powershell -ExecutionPolicy Bypass -File desktop\runtime\build-runtime.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modelctl-runtime-${{ matrix.target }}
+          path: desktop/dist/runtime/${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 30

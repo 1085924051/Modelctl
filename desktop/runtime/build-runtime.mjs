@@ -45,10 +45,10 @@ const pythonName = target === "windows-amd64" ? "python/python.exe" : "python/bi
 if (!nodeInput || !nodeRoot || !pythonInput || !pythonRoot) throw new Error("real runtime inputs are required: --node-binary, --node-root, --python-binary, and --python-root");
 await fs.mkdir(path.dirname(path.join(output, nodeName)), { recursive: true });
 await fs.mkdir(path.dirname(path.join(output, pythonName)), { recursive: true });
-await fs.cp(path.resolve(nodeRoot), path.join(output, "node"), { recursive: true, dereference: false });
+await fs.cp(path.resolve(nodeRoot), path.join(output, "node"), { recursive: true, dereference: true });
 const bundledNode = path.join(output, nodeName);
 if (!(await fileExists(bundledNode))) throw new Error(`node root does not contain expected executable ${nodeName}`);
-await fs.cp(path.resolve(pythonRoot), path.join(output, "python"), { recursive: true, dereference: false });
+await fs.cp(path.resolve(pythonRoot), path.join(output, "python"), { recursive: true, dereference: true });
 const bundledPython = path.join(output, pythonName);
 if (!(await fileExists(bundledPython))) throw new Error(`python root does not contain expected executable ${pythonName}`);
 await fs.chmod(path.join(output, nodeName), 0o755).catch(() => undefined);
