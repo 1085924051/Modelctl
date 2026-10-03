@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/1085924051/modelctl/desktop/internal/api"
+	runtimepkg "github.com/1085924051/modelctl/desktop/internal/runtime"
 )
 
 type modelState struct {
@@ -38,12 +39,18 @@ type Desktop struct {
 	questionRows   []*questionEditor
 	questionList   *fyne.Container
 	result         *widget.RichText
+	supervisor     *runtimepkg.Supervisor
+	startupError   error
 }
 
 func New(client *api.Client) *Desktop {
+	return NewWithSupervisor(client, nil, nil)
+}
+
+func NewWithSupervisor(client *api.Client, supervisor *runtimepkg.Supervisor, startupError error) *Desktop {
 	application := app.NewWithID("com.modelctl.desktop")
 	application.Settings().SetTheme(newTheme())
-	desktop := &Desktop{client: client, app: application, selectedPage: "models"}
+	desktop := &Desktop{client: client, app: application, selectedPage: "models", supervisor: supervisor, startupError: startupError}
 	desktop.window = application.NewWindow("Modelctl")
 	desktop.window.Resize(fyne.NewSize(1120, 760))
 	desktop.page = container.NewVScroll(container.NewVBox())
@@ -52,7 +59,17 @@ func New(client *api.Client) *Desktop {
 	return desktop
 }
 
-func (d *Desktop) Run() { d.refresh(); d.window.ShowAndRun() }
+func (d *Desktop) Run() {
+	if d.startupError != nil {
+		d.status.SetText("Runtime unavailable: " + d.startupError.Error())
+	} else {
+		d.refresh()
+	}
+	d.window.ShowAndRun()
+	if d.supervisor != nil {
+		_ = d.supervisor.Close()
+	}
+}
 
 func (d *Desktop) layout() fyne.CanvasObject {
 	d.status = widget.NewLabel("Connecting…")
