@@ -1,6 +1,7 @@
 # Modelctl Desktop v0.1.0
 
-Modelctl Desktop is a native macOS arm64 client for the local Modelctl daemon.
+Modelctl Desktop is a native client with a packaged local Modelctl daemon and
+runtime. Model weights remain separate and download on first use.
 
 ## Requirements
 
