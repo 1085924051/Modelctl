@@ -6,7 +6,7 @@ control plane.
 
 Required entries:
 
-- `node/node` or `node/node.exe`
+- `node/bin/node` on macOS/Linux or `node/node.exe` on Windows, plus the Node runtime libraries
 - `control-plane/bin/modelctl.js`
 - `python/bin/python` or `python/python.exe`
 - `runtime-manifest.json`
