@@ -89,7 +89,7 @@ func (d *Desktop) refresh() {
 	go func() {
 		defer d.refreshMu.Unlock()
 		if err := d.client.Health(); err != nil {
-			fyne.Do(func() { d.status.SetText("Offline: " + err.Error()) })
+			fyne.Do(func() { d.status.SetText(formatConnectionError(d.client.BaseURL(), err)) })
 			return
 		}
 		models, err := d.client.Models()

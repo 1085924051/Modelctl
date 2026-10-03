@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -24,6 +25,23 @@ func TestProgressPercent(t *testing.T) {
 				t.Fatalf("progressPercent(%d, %d) = %d, want %d", test.done, test.total, got, test.want)
 			}
 		})
+	}
+}
+
+func TestFormatConnectionErrorExplainsWindowsDaemonStartup(t *testing.T) {
+	err := errors.New("Get \\\"http://127.0.0.1:11435/health\\\": dial tcp 127.0.0.1:11435: connectex: No connection could be made because the target machine actively refused it.")
+	got := formatConnectionError("http://127.0.0.1:11435", err)
+	for _, expected := range []string{"Offline", "daemon", "modelctl daemon", "127.0.0.1:11435"} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("connection message missing %q: %s", expected, got)
+		}
+	}
+}
+
+func TestFormatConnectionErrorPreservesUnexpectedErrors(t *testing.T) {
+	err := errors.New("unexpected proxy failure")
+	if got := formatConnectionError("http://127.0.0.1:11435", err); got != "Offline: unexpected proxy failure" {
+		t.Fatalf("unexpected error message = %q", got)
 	}
 }
 

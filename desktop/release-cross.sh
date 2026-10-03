@@ -48,6 +48,8 @@ mkdir -p "$WINDOWS_STAGE"
 unzip -q -o "$ROOT/fyne-cross/dist/windows-amd64/Modelctl.zip" -d "$WINDOWS_STAGE"
 cp "$ROOT/packaging/README-windows.txt" "$WINDOWS_STAGE/README.txt"
 cp "$ROOT/RELEASE_NOTES.md" "$WINDOWS_STAGE/RELEASE_NOTES.txt"
+cp "$ROOT/packaging/Start-Modelctl.ps1" "$WINDOWS_STAGE/Start-Modelctl.ps1"
+cp "$ROOT/packaging/Start-Modelctl.cmd" "$WINDOWS_STAGE/Start-Modelctl.cmd"
 WINDOWS_PACKAGE="$RELEASE/Modelctl-windows-x64-v${VERSION}.zip"
 (cd "$STAGE" && zip -qry "$WINDOWS_PACKAGE" "Modelctl-Windows-x64")
 
@@ -76,6 +78,7 @@ macOS:   Modelctl-macOS-arm64-v$VERSION-adhoc.dmg / .zip (Apple Silicon, ad-hoc 
 
 The macOS files are included when release-macos.sh has been run before this script.
 All packages contain the client only. Install the Modelctl daemon/runtime separately.
+The Windows package includes Start-Modelctl.cmd, which starts the local daemon when the modelctl command is installed.
 Verify the platform package against SHA256SUMS before installing or sharing.
 
 Windows is unsigned. macOS is ad-hoc signed when no Developer ID identity is

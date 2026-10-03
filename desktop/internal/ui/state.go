@@ -1,6 +1,19 @@
 package ui
 
-import "github.com/1085924051/modelctl/desktop/internal/api"
+import (
+	"strings"
+
+	"github.com/1085924051/modelctl/desktop/internal/api"
+)
+
+func formatConnectionError(baseURL string, err error) string {
+	message := err.Error()
+	lower := strings.ToLower(message)
+	if strings.Contains(lower, "connection refused") || strings.Contains(lower, "actively refused") || strings.Contains(lower, "no connection could be made") {
+		return "Offline: daemon is not running at " + baseURL + ". Start modelctl daemon or use Start-Modelctl.cmd."
+	}
+	return "Offline: " + message
+}
 
 func progressPercent(done, total int64) int {
 	if total <= 0 {
