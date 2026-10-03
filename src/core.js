@@ -7,7 +7,8 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-export const rootDir = path.resolve(here, "..");
+const packagedRuntimeRoot = process.env.MODELCTL_RUNTIME_ROOT ? path.resolve(process.env.MODELCTL_RUNTIME_ROOT) : "";
+export const rootDir = packagedRuntimeRoot ? path.join(packagedRuntimeRoot, "control-plane") : path.resolve(here, "..");
 export const catalogDir = path.join(rootDir, "catalog");
 let stateWriteQueue = Promise.resolve();
 const managedChildren = new Map();
