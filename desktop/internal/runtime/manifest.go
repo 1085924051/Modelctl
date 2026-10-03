@@ -42,7 +42,7 @@ func requiredNodeRelativePath() string {
 	if runtime.GOOS == "windows" {
 		return filepath.Join("node", "node.exe")
 	}
-	return filepath.Join("node", "node")
+	return filepath.Join("node", "bin", "node")
 }
 
 func requiredControlPlaneRelativePath() string {
