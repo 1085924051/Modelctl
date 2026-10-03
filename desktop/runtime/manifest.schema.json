@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "software_version", "build_commit", "target", "files", "licenses"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "software_version": {"type": "string", "minLength": 1},
+    "build_commit": {"type": "string", "minLength": 1},
+    "target": {"enum": ["darwin-arm64", "windows-amd64", "linux-amd64"]},
+    "node_version": {"type": "string"},
+    "python_version": {"type": "string"},
+    "laya_version": {"type": "string"},
+    "torch_version": {"type": "string"},
+    "files": {
+      "type": "object",
+      "minProperties": 3,
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+    },
+    "licenses": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}
