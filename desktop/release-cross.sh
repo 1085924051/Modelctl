@@ -72,6 +72,9 @@ cp -R "$DIST/runtime/linux-amd64" "$LINUX_STAGE/runtime"
 LINUX_PACKAGE="$RELEASE/Modelctl-linux-x86_64-v${VERSION}.tar.xz"
 tar -cJf "$LINUX_PACKAGE" -C "$STAGE" "Modelctl-Linux-x86_64"
 
+APPIMAGE_TOOL="${APPIMAGE_TOOL:-appimagetool}" bash "$ROOT/package-linux-appimage.sh"
+cp "$DIST/Modelctl-linux-x86_64-v${VERSION}.AppImage" "$RELEASE/"
+
 MAC_DMG="$DIST/Modelctl-macOS-arm64-v${VERSION}-adhoc.dmg"
 MAC_ZIP="$DIST/Modelctl-macOS-arm64-v${VERSION}-adhoc.zip"
 for file in "$MAC_DMG" "$MAC_ZIP"; do
