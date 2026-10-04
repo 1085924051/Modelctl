@@ -49,9 +49,9 @@ workflow also builds Windows/Linux packages on a clean Linux runner.
 
 Windows and Linux packages include the client, daemon, Node/Python/Laya runtime,
 and a verified runtime manifest. Model weights remain separate and download on
-first use. Windows builds are unsigned; Linux builds target x86_64 and require
-an X11/OpenGL desktop runtime. Use the packaged platform README for installation
-steps.
+first use. Windows builds are unsigned; Linux builds target x86_64 and provide
+an AppImage plus a tar.xz fallback. Both require an X11/OpenGL desktop runtime.
+Use the packaged platform README for installation steps.
 
 To create distributable artifacts:
 

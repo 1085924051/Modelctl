@@ -81,3 +81,66 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File desktop/tests/smoke-runtime.ps1 desktop/dist/runtime/${{ matrix.target }} 11435
+
+  package-windows-linux:
+    needs: runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+      - name: Install Fyne cross compiler
+        run: go install github.com/fyne-io/fyne-cross@v1.6.2
+      - name: Install appimagetool
+        run: |
+          curl -L --fail --retry 3 -o /usr/local/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /usr/local/bin/appimagetool
+      - uses: actions/download-artifact@v4
+        with:
+          name: modelctl-runtime-windows-amd64
+          path: desktop/dist/runtime/windows-amd64
+      - uses: actions/download-artifact@v4
+        with:
+          name: modelctl-runtime-linux-amd64
+          path: desktop/dist/runtime/linux-amd64
+      - name: Build Windows and Linux packages
+        env:
+          MODELCTL_DESKTOP_VERSION: ${{ inputs.version || '0.1.0' }}
+          MODELCTL_RUNTIME_ROOT: ${{ github.workspace }}/desktop/dist/runtime
+        run: ./desktop/release-cross.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modelctl-desktop-windows-linux-self-contained
+          path: desktop/dist/release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  package-macos:
+    needs: runtime
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          name: modelctl-runtime-darwin-arm64
+          path: desktop/dist/runtime/macos-arm64
+      - name: Build macOS DMG and ZIP
+        env:
+          MODELCTL_DESKTOP_VERSION: ${{ inputs.version || '0.1.0' }}
+          MODELCTL_RUNTIME_ROOT: ${{ github.workspace }}/desktop/dist/runtime/macos-arm64
+        run: ./desktop/release-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modelctl-desktop-macos-self-contained
+          path: |
+            desktop/dist/Modelctl-macOS-*.dmg
+            desktop/dist/Modelctl-macOS-*.zip
+            desktop/dist/Modelctl-macOS-*.sha256
+          if-no-files-found: error
+          retention-days: 30
