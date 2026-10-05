@@ -22,10 +22,13 @@ jobs:
         include:
           - os: macos-14
             target: darwin-arm64
+            requirements: macos-arm64.in
           - os: windows-2025
             target: windows-amd64
+            requirements: windows-amd64.in
           - os: ubuntu-24.04
             target: linux-amd64
+            requirements: linux-amd64.in
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -41,14 +44,14 @@ jobs:
         run: |
           python -m venv --copies .runtime-venv
           .runtime-venv/bin/python -m pip install --upgrade pip
-          .runtime-venv/bin/python -m pip install -r desktop/runtime/requirements/${{ matrix.target }}.in
+          .runtime-venv/bin/python -m pip install -r desktop/runtime/requirements/${{ matrix.requirements }}
       - name: Install runtime dependencies on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           python -m venv --copies .runtime-venv
           .runtime-venv\Scripts\python.exe -m pip install --upgrade pip
-          .runtime-venv\Scripts\python.exe -m pip install -r desktop/runtime/requirements/${{ matrix.target }}.in
+          .runtime-venv\Scripts\python.exe -m pip install -r desktop/runtime/requirements/${{ matrix.requirements }}
       - name: Build runtime tree on Unix
         if: runner.os != 'Windows'
         shell: bash
