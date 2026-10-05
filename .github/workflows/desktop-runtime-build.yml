@@ -35,12 +35,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.11
-      - name: Install runtime dependencies
+      - name: Install runtime dependencies on Unix
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           python -m venv --copies .runtime-venv
           .runtime-venv/bin/python -m pip install --upgrade pip
           .runtime-venv/bin/python -m pip install -r desktop/runtime/requirements/${{ matrix.target }}.in
+      - name: Install runtime dependencies on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m venv --copies .runtime-venv
+          .runtime-venv\Scripts\python.exe -m pip install --upgrade pip
+          .runtime-venv\Scripts\python.exe -m pip install -r desktop/runtime/requirements/${{ matrix.target }}.in
       - name: Build runtime tree on Unix
         if: runner.os != 'Windows'
         shell: bash

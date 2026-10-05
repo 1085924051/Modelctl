@@ -84,13 +84,15 @@ done
 cat > "$RELEASE/README.txt" <<EOF
 Modelctl Desktop $VERSION packages
 
-Windows: Modelctl-windows-x64-v$VERSION.zip (Windows 10/11 x64, unsigned)
-Linux:   Modelctl-linux-x86_64-v$VERSION.tar.xz (Linux x86_64)
+Windows: Modelctl-windows-x64-v$VERSION.zip (Windows 10/11 x64, unsigned, self-contained runtime)
+Linux:   Modelctl-linux-x86_64-v$VERSION.tar.xz / .AppImage (Linux x86_64, self-contained runtime)
 macOS:   Modelctl-macOS-arm64-v$VERSION-adhoc.dmg / .zip (Apple Silicon, ad-hoc signed)
 
 The macOS files are included when release-macos.sh has been run before this script.
-All packages contain the client only. Install the Modelctl daemon/runtime separately.
-The Windows package includes Start-Modelctl.cmd, which starts the local daemon when the modelctl command is installed.
+All desktop packages include the local daemon and platform runtime. Model weights
+remain separate and download on first use. The Windows package starts the
+bundled daemon from Modelctl.exe; no external Node.js or Python installation is
+required.
 Verify the platform package against SHA256SUMS before installing or sharing.
 
 Windows is unsigned. macOS is ad-hoc signed when no Developer ID identity is
