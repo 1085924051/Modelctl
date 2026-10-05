@@ -80,7 +80,7 @@ jobs:
         shell: pwsh
         run: |
           $node = (Get-Command node).Source
-          $nodeRoot = Split-Path (Split-Path $node -Parent) -Parent
+          $nodeRoot = Split-Path $node -Parent
           $env:MODELCTL_RUNTIME_TARGET = '${{ matrix.target }}'
           $env:MODELCTL_NODE_BINARY = $node
           $env:MODELCTL_NODE_ROOT = $nodeRoot
