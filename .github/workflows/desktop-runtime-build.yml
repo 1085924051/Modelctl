@@ -23,12 +23,18 @@ jobs:
           - os: macos-14
             target: darwin-arm64
             requirements: macos-arm64.in
+            python_archive: cpython-3.11.17+20261001-aarch64-apple-darwin-install_only.tar.gz
+            python_url: https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.11.17%2B20261001-aarch64-apple-darwin-install_only.tar.gz
           - os: windows-2025
             target: windows-amd64
             requirements: windows-amd64.in
+            python_archive: cpython-3.11.17+20261001-x86_64-pc-windows-msvc-install_only.tar.gz
+            python_url: https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.11.17%2B20261001-x86_64-pc-windows-msvc-install_only.tar.gz
           - os: ubuntu-24.04
             target: linux-amd64
             requirements: linux-amd64.in
+            python_archive: cpython-3.11.17+20261001-x86_64-unknown-linux-gnu-install_only.tar.gz
+            python_url: https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.11.17%2B20261001-x86_64-unknown-linux-gnu-install_only.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -42,16 +48,20 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          python -m venv --copies .runtime-venv
-          .runtime-venv/bin/python -m pip install --upgrade pip
-          .runtime-venv/bin/python -m pip install -r desktop/runtime/requirements/${{ matrix.requirements }}
+          curl -L --fail --retry 3 -o /tmp/${{ matrix.python_archive }} '${{ matrix.python_url }}'
+          mkdir -p .runtime-python
+          tar -xzf /tmp/${{ matrix.python_archive }} -C .runtime-python --strip-components=1
+          .runtime-python/bin/python -m pip install --upgrade pip
+          .runtime-python/bin/python -m pip install -r desktop/runtime/requirements/${{ matrix.requirements }}
       - name: Install runtime dependencies on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          python -m venv --copies .runtime-venv
-          .runtime-venv\Scripts\python.exe -m pip install --upgrade pip
-          .runtime-venv\Scripts\python.exe -m pip install -r desktop/runtime/requirements/${{ matrix.requirements }}
+          Invoke-WebRequest -Uri '${{ matrix.python_url }}' -OutFile "$env:TEMP\${{ matrix.python_archive }}"
+          New-Item -ItemType Directory -Force -Path .runtime-python | Out-Null
+          tar -xzf "$env:TEMP\${{ matrix.python_archive }}" -C .runtime-python --strip-components=1
+          .runtime-python\python.exe -m pip install --upgrade pip
+          .runtime-python\python.exe -m pip install -r desktop/runtime/requirements/${{ matrix.requirements }}
       - name: Build runtime tree on Unix
         if: runner.os != 'Windows'
         shell: bash
@@ -61,8 +71,8 @@ jobs:
           MODELCTL_RUNTIME_TARGET="${{ matrix.target }}" \
           MODELCTL_NODE_BINARY="$NODE_BINARY" \
           MODELCTL_NODE_ROOT="$NODE_ROOT" \
-          MODELCTL_PYTHON_BINARY="$PWD/.runtime-venv/bin/python" \
-          MODELCTL_PYTHON_ROOT="$PWD/.runtime-venv" \
+          MODELCTL_PYTHON_BINARY="$PWD/.runtime-python/bin/python" \
+          MODELCTL_PYTHON_ROOT="$PWD/.runtime-python" \
           MODELCTL_RUNTIME_OUTPUT="$PWD/desktop/dist/runtime/${{ matrix.target }}" \
           bash ./desktop/runtime/build-runtime.sh
       - name: Build runtime tree on Windows
@@ -74,8 +84,8 @@ jobs:
           $env:MODELCTL_RUNTIME_TARGET = '${{ matrix.target }}'
           $env:MODELCTL_NODE_BINARY = $node
           $env:MODELCTL_NODE_ROOT = $nodeRoot
-          $env:MODELCTL_PYTHON_BINARY = "$(Resolve-Path .runtime-venv\Scripts\python.exe)"
-          $env:MODELCTL_PYTHON_ROOT = "$(Resolve-Path .runtime-venv)"
+          $env:MODELCTL_PYTHON_BINARY = "$(Join-Path $env:GITHUB_WORKSPACE '.runtime-python\python.exe')"
+          $env:MODELCTL_PYTHON_ROOT = "$(Join-Path $env:GITHUB_WORKSPACE '.runtime-python')"
           $runtimeOutput = Join-Path $env:GITHUB_WORKSPACE "desktop\dist\runtime\${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $runtimeOutput | Out-Null
           $env:MODELCTL_RUNTIME_OUTPUT = $runtimeOutput

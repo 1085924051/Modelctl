@@ -5,7 +5,12 @@ $DataDir = Join-Path $env:TEMP ("modelctl-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 $Node = Join-Path $RuntimeRoot "node\node.exe"
 $Python = Join-Path $RuntimeRoot "python\python.exe"
-if (-not (Test-Path $Node) -or -not (Test-Path $Python)) { throw "runtime executables are missing" }
+if (-not (Test-Path $Node) -or -not (Test-Path $Python)) {
+  Write-Host "Expected Node: $Node"
+  Write-Host "Expected Python: $Python"
+  Get-ChildItem -Path $RuntimeRoot -Recurse -Depth 3 -File | Select-Object -ExpandProperty FullName | Select-Object -First 80
+  throw "runtime executables are missing"
+}
 $env:MODELCTL_RUNTIME_ROOT = $RuntimeRoot
 $env:MODELCTL_DATA_DIR = $DataDir
 $env:MODELCTL_PYTHON = $Python

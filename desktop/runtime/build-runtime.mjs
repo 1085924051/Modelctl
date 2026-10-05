@@ -50,6 +50,10 @@ const bundledNode = path.join(output, nodeName);
 if (!(await fileExists(bundledNode))) throw new Error(`node root does not contain expected executable ${nodeName}`);
 await fs.cp(path.resolve(pythonRoot), path.join(output, "python"), { recursive: true, dereference: true });
 const bundledPython = path.join(output, pythonName);
+if (target === "windows-amd64" && !(await fileExists(bundledPython))) {
+  const venvPython = path.join(output, "python", "Scripts", "python.exe");
+  if (await fileExists(venvPython)) await fs.copyFile(venvPython, bundledPython);
+}
 if (!(await fileExists(bundledPython))) throw new Error(`python root does not contain expected executable ${pythonName}`);
 await fs.chmod(path.join(output, nodeName), 0o755).catch(() => undefined);
 await fs.chmod(path.join(output, pythonName), 0o755).catch(() => undefined);
