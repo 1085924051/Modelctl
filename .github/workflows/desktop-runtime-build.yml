@@ -64,7 +64,7 @@ jobs:
           MODELCTL_PYTHON_BINARY="$PWD/.runtime-venv/bin/python" \
           MODELCTL_PYTHON_ROOT="$PWD/.runtime-venv" \
           MODELCTL_RUNTIME_OUTPUT="$PWD/desktop/dist/runtime/${{ matrix.target }}" \
-          ./desktop/runtime/build-runtime.sh
+          bash ./desktop/runtime/build-runtime.sh
       - name: Build runtime tree on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -76,7 +76,9 @@ jobs:
           $env:MODELCTL_NODE_ROOT = $nodeRoot
           $env:MODELCTL_PYTHON_BINARY = "$(Resolve-Path .runtime-venv\Scripts\python.exe)"
           $env:MODELCTL_PYTHON_ROOT = "$(Resolve-Path .runtime-venv)"
-          $env:MODELCTL_RUNTIME_OUTPUT = "$(Resolve-Path desktop\dist\runtime)\${{ matrix.target }}"
+          $runtimeOutput = Join-Path $env:GITHUB_WORKSPACE "desktop\dist\runtime\${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $runtimeOutput | Out-Null
+          $env:MODELCTL_RUNTIME_OUTPUT = $runtimeOutput
           powershell -ExecutionPolicy Bypass -File desktop\runtime\build-runtime.ps1
       - uses: actions/upload-artifact@v4
         with:
@@ -87,7 +89,7 @@ jobs:
       - name: Run runtime smoke test on Unix
         if: runner.os != 'Windows'
         shell: bash
-        run: ./desktop/tests/smoke-runtime.sh desktop/dist/runtime/${{ matrix.target }} 11435
+        run: bash ./desktop/tests/smoke-runtime.sh desktop/dist/runtime/${{ matrix.target }} 11435
       - name: Run runtime smoke test on Windows
         if: runner.os == 'Windows'
         shell: pwsh
