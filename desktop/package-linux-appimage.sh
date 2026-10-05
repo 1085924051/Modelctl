@@ -21,6 +21,7 @@ install -m 0755 "$STAGE/usr/local/bin/desktop" "$APPDIR/usr/bin/modelctl-desktop
 cp -R "$RUNTIME" "$APPDIR/usr/share/modelctl/runtime"
 if [ -f "$STAGE/usr/local/share/pixmaps/com.modelctl.desktop.png" ]; then
   install -m 0644 "$STAGE/usr/local/share/pixmaps/com.modelctl.desktop.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/modelctl.png"
+  install -m 0644 "$STAGE/usr/local/share/pixmaps/com.modelctl.desktop.png" "$APPDIR/modelctl.png"
 fi
 cp "$ROOT/packaging/appimage/AppRun" "$APPDIR/AppRun"
 cp "$ROOT/packaging/appimage/modelctl.desktop" "$APPDIR/modelctl.desktop"

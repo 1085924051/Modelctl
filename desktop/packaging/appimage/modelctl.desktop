@@ -5,4 +5,4 @@ Comment=Local large model deployment and runtime management
 Exec=modelctl-desktop
 Icon=modelctl
 Terminal=false
-Categories=Development;Utility;
+Categories=Utility;
