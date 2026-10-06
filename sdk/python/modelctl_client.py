@@ -27,6 +27,9 @@ class Modelctl:
     def runs(self) -> list[dict]:
         return self._request("GET", "/v1/runs").get("items", [])
 
+    def batch(self, capability_id: str, items: list[dict]) -> dict:
+        return self._request("POST", f"/v1/capabilities/{capability_id}/batch", {"items": items})
+
     def _request(self, method: str, path: str, body: dict | None = None) -> dict:
         payload = None if body is None else json.dumps(body).encode("utf-8")
         headers = {"accept": "application/json"}

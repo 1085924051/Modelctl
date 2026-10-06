@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -98,12 +99,37 @@ func (d *Desktop) renderCapabilities() {
 					})
 				}()
 			})
+			batchInput := widget.NewMultiLineEntry()
+			batchInput.SetText("The customer was charged twice and wants a refund.\nThe user cannot log in to the dashboard.")
+			batchInput.SetMinRowsVisible(3)
+			batchStatus := widget.NewLabel("")
+			var batchButton *widget.Button
+			batchButton = widget.NewButton("Run batch", func() {
+				items := []api.CapabilityInvokeRequest{}
+				for _, line := range strings.Split(batchInput.Text, "\n") { if text := strings.TrimSpace(line); text != "" { items = append(items, api.CapabilityInvokeRequest{Input: map[string]any{"text": text}}) } }
+				if len(items) == 0 { batchStatus.SetText("Add at least one input line."); return }
+				batchButton.Disable(); batchStatus.SetText("Queueing…")
+				go func() {
+					task, err := d.client.CreateCapabilityBatch(capability.ID, items)
+					if err != nil { fyne.Do(func() { batchButton.Enable(); batchStatus.SetText(err.Error()) }); return }
+					for {
+						current, taskErr := d.client.Task(task.TaskID)
+						if taskErr != nil { fyne.Do(func() { batchButton.Enable(); batchStatus.SetText(taskErr.Error()) }); return }
+						fyne.Do(func() { batchStatus.SetText(fmt.Sprintf("%s · %d/%d", current.Status, current.Progress.ItemsDone, current.Progress.ItemsTotal)) })
+						if current.Status == "succeeded" || current.Status == "failed" || current.Status == "cancelled" { fyne.Do(func() { batchButton.Enable() }); d.refresh(); return }
+						time.Sleep(500 * time.Millisecond)
+					}
+				}()
+			})
 			box.Add(widget.NewCard(capability.Name, capability.ID+" v"+capability.Version, container.NewVBox(
 				widget.NewLabel(capability.Description),
 				widget.NewLabel(fmt.Sprintf("Model: %s · %s · %s", capability.Model.ModelID, capability.Model.Variant, capability.Model.Profile)),
 				widget.NewLabel("Test input"),
 				testInput,
 				container.NewHBox(testButton, testStatus),
+				widget.NewLabel("Batch test · one input per line"),
+				batchInput,
+				container.NewHBox(batchButton, batchStatus),
 				widget.NewLabel("Integration example"),
 				widget.NewLabel(capabilitySnippet(d.client.BaseURL(), capability.ID)),
 			)))

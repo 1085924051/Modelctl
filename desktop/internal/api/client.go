@@ -133,6 +133,8 @@ type Task struct {
 type TaskProgress struct {
 	BytesDone  int64 `json:"bytes_done"`
 	BytesTotal int64 `json:"bytes_total"`
+	ItemsDone  int   `json:"items_done"`
+	ItemsTotal int   `json:"items_total"`
 }
 
 type StartInstanceRequest struct {
@@ -199,6 +201,12 @@ type CapabilitiesResponse struct { Items []Capability `json:"items"` }
 type CapabilityInvokeRequest struct {
 	Input    map[string]any `json:"input"`
 	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+type CapabilityBatchResponse struct {
+	TaskID string `json:"task_id"`
+	Status string `json:"status"`
+	Poll   string `json:"poll"`
 }
 
 type CapabilityInvokeResponse struct {
@@ -311,6 +319,12 @@ func (c *Client) CreateCapability(capability Capability) (Capability, error) {
 func (c *Client) InvokeCapability(id string, request CapabilityInvokeRequest) (CapabilityInvokeResponse, error) {
 	var result CapabilityInvokeResponse
 	err := c.do(http.MethodPost, "/v1/capabilities/"+url.PathEscape(id)+"/invoke", request, &result)
+	return result, err
+}
+
+func (c *Client) CreateCapabilityBatch(id string, items []CapabilityInvokeRequest) (CapabilityBatchResponse, error) {
+	var result CapabilityBatchResponse
+	err := c.do(http.MethodPost, "/v1/capabilities/"+url.PathEscape(id)+"/batch", map[string]any{"items": items}, &result)
 	return result, err
 }
 

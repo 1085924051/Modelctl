@@ -80,6 +80,21 @@ test("capability invocation explains that its model must be ready", async () => 
   assert.equal(result.body.error.code, "CAPABILITY_NOT_READY");
 });
 
+test("capability batches return a task that records per-item errors", async () => {
+  await request("/v1/capabilities", "POST", capability);
+  const created = await request("/v1/capabilities/refund-check/batch", "POST", { items: [{ input: { text: "one" } }, { input: { text: "two" } }] });
+  assert.equal(created.status, 202);
+  let task;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    task = await request(created.body.poll);
+    if (["succeeded", "failed", "cancelled"].includes(task.body.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(task.body.status, "succeeded");
+  assert.equal(task.body.progress.items_done, 2);
+  assert.equal(task.body.errors.length, 2);
+});
+
 test("remote binding requires an explicit API token", async () => {
   const previous = process.env.MODELCTL_API_TOKEN;
   delete process.env.MODELCTL_API_TOKEN;

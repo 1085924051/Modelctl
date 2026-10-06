@@ -339,3 +339,11 @@ Returns the locally stored input, capability version, instance id, response, and
 The desktop History page uses this collection for local replay and diagnostics.
 SDK examples are in `sdk/python/modelctl_client.py` and
 `sdk/javascript/modelctl-client.mjs`.
+
+### `POST /v1/capabilities/{id}/batch`
+
+Starts a sequential batch task with 1 to 1000 items. Each item uses the same
+`{"input": {...}, "metadata": {...}}` shape as a single invocation. Poll the
+returned task id through `GET /v1/tasks/{task_id}`. Successful items create run
+records; failed items are recorded with their index and structured error while
+the rest of the batch continues.

@@ -21,6 +21,13 @@ export class Modelctl {
     return (await this.request("/v1/runs")).items || [];
   }
 
+  async batch(capabilityId, items) {
+    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/batch`, {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    });
+  }
+
   async request(path, options = {}) {
     const headers = { accept: "application/json", ...(options.body ? { "content-type": "application/json" } : {}) };
     if (this.token) headers.authorization = `Bearer ${this.token}`;
