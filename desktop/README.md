@@ -111,6 +111,11 @@ downloaded, the first capability request starts its matching runtime
 automatically. If the variant is missing, the API reports the exact model and
 variant that must be downloaded.
 
+The capability editor includes starter templates for refund detection, support
+ticket routing, and document risk triage. A non-specialist can choose a
+workflow, adjust its business fields and decisions, and publish it without
+writing raw Laya/Jev questions.
+
 The self-contained Windows launcher starts `Modelctl.exe` directly. The desktop
 Supervisor verifies and starts the bundled Node/Python runtime, so a packaged
 installation does not require a global `modelctl`, Node.js, or Python command.
