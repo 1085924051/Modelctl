@@ -136,8 +136,10 @@ that need the full model response.
 
 Use `/v1/capabilities/{id}/batch` for imports, nightly jobs, or queues. Each
 item has the same input shape as a single call. Poll the task URL and persist
-successful results by item index; a failed item does not cancel the rest of the
-batch.
+successful results by item index. Terminal task results include the normalized
+`output`, optional metadata, and `run_id`; use the run ID when an operator needs
+to replay or inspect the raw adapter response. A failed item does not cancel the
+rest of the batch.
 
 ### Contract rollout
 

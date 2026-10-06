@@ -29,12 +29,15 @@ queue worker can wait for completion without implementing the task protocol:
 task = client.batch("ticket-routing", [{"input": {"text": "..."}}])
 finished = client.wait_task(task["task_id"])
 for item in finished["results"]:
-    print(item["index"], item["run_id"])
+    print(item["index"], item["run_id"], item["output"])
 ```
 
 ```js
 const task = await client.batch("ticket-routing", [{ input: { text: "..." } }]);
 const finished = await client.waitTask(task.task_id);
+for (const item of finished.results ?? []) {
+  console.log(item.index, item.run_id, item.output);
+}
 ```
 
 Once a model variant has been downloaded, the first capability call can start

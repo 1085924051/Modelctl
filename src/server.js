@@ -529,7 +529,7 @@ async function processCapabilityBatch(taskId, id, version, items) {
   await updateState((state) => { if (state.tasks[taskId]) { state.tasks[taskId].status = "running"; state.tasks[taskId].started_at = new Date().toISOString(); } });
   for (let index = 0; index < items.length; index += 1) {
     const current = (await readState()).tasks[taskId]; if (!current || current.status === "cancelled") return;
-    try { const result = await executeCapability(id, version, objectBody(items[index])); await updateState((state) => { const task = state.tasks[taskId]; if (task) { task.results.push({ index, run_id: result.run_id, request_id: result.request_id }); task.progress.items_done = index + 1; task.updated_at = new Date().toISOString(); } }); }
+    try { const result = await executeCapability(id, version, objectBody(items[index])); await updateState((state) => { const task = state.tasks[taskId]; if (task) { task.results.push({ index, run_id: result.run_id, request_id: result.request_id, output: result.output, ...(result.metadata ? { metadata: result.metadata } : {}) }); task.progress.items_done = index + 1; task.updated_at = new Date().toISOString(); } }); }
     catch (error) { await updateState((state) => { const task = state.tasks[taskId]; if (task) { task.errors.push({ index, code: error.code || "BATCH_ITEM_FAILED", message: error.message }); task.progress.items_done = index + 1; task.updated_at = new Date().toISOString(); } }); }
   }
   await updateState((state) => { const task = state.tasks[taskId]; if (task && task.status !== "cancelled") { task.status = "succeeded"; task.finished_at = new Date().toISOString(); task.updated_at = task.finished_at; } });

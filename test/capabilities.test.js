@@ -144,14 +144,18 @@ test("capability invocation explains that its model must be downloaded", async (
 });
 
 test("capability invocation returns normalized answers and preserves metadata", async () => {
+  let adapterRequests = 0;
   adapter = http.createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const received = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    assert.equal(received.state.body, "Please refund this order");
-    assert.ok(received.questions.refund);
-    assert.ok(received.questions.team);
-    assert.ok(received.questions.priority);
+    if (adapterRequests === 0) {
+      assert.equal(received.state.body, "Please refund this order");
+      assert.ok(received.questions.refund);
+      assert.ok(received.questions.team);
+      assert.ok(received.questions.priority);
+    }
+    adapterRequests += 1;
     const response = {
       answers: {
         refund: { type: "noul", noul: 0.93, confidence: 0.91 },
@@ -196,6 +200,22 @@ test("capability invocation returns normalized answers and preserves metadata", 
   const history = await request("/v1/runs");
   assert.deepEqual(history.body.items[0].metadata, { ticket_id: "T-100", tenant_id: "acme" });
   assert.equal(history.body.items[0].response.answers.team.choice, "billing");
+  const batch = await request("/v1/capabilities/refund-check/batch", "POST", {
+    items: [
+      { input: { text: "one" }, metadata: { ticket_id: "T-101" } },
+      { input: { text: "two" }, metadata: { ticket_id: "T-102" } },
+    ],
+  });
+  let task;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    task = await request(batch.body.poll);
+    if (["succeeded", "failed", "cancelled"].includes(task.body.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(task.body.status, "succeeded");
+  assert.equal(task.body.results.length, 2);
+  assert.equal(task.body.results[0].output.refund.value, 0.93);
+  assert.deepEqual(task.body.results[1].metadata, { ticket_id: "T-102" });
 });
 
 test("structured capability inputs validate fields and render the Laya prompt", async () => {
