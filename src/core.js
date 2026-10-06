@@ -452,7 +452,7 @@ async function updateTask(taskId, patch) { await updateState((s) => { if (s.task
 export function newId(prefix) { return `${prefix}_${crypto.randomUUID()}`; }
 
 export async function startLaya(instance, modelPath, variant, profile) {
-  const adapter = path.join(rootDir, "adapters", "laya", "serve.py");
+  const adapter = process.env.MODELCTL_LAYA_ADAPTER ? path.resolve(process.env.MODELCTL_LAYA_ADAPTER) : path.join(rootDir, "adapters", "laya", "serve.py");
   const python = pythonExecutable();
   const child = spawn(python, [adapter, "--model-dir", modelPath, "--variant", variant, "--device", profile === "auto" ? "" : profile, "--host", "127.0.0.1", "--port", String(instance.port)], { cwd: rootDir, env: { ...process.env, PYTHONUNBUFFERED: "1" }, stdio: ["ignore", "pipe", "pipe"] });
   const log = fs.createWriteStream(instance.log_path, { flags: "a" }); child.stdout.pipe(log); child.stderr.pipe(log); instance.pid = child.pid;

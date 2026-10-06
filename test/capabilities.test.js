@@ -242,6 +242,38 @@ test("structured capability inputs validate fields and render the Laya prompt", 
   assert.deepEqual(history.body.items[0].input, { text: "charged twice", order_id: "O-42" });
 });
 
+test("first capability invocation automatically starts the matching adapter", async () => {
+  const fakeDir = await fsp.mkdtemp(path.join(os.tmpdir(), "modelctl-fake-adapter-"));
+  const adapterScript = path.join(fakeDir, "fake-adapter.py");
+  await fsp.writeFile(adapterScript, `import json, sys\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nport = int(sys.argv[sys.argv.index("--port") + 1])\nclass Handler(BaseHTTPRequestHandler):\n    def do_GET(self):\n        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(json.dumps({"status": "ok", "loaded": ["english"], "device": "cpu"}).encode())\n    def do_POST(self):\n        size = int(self.headers.get("Content-Length", "0")); self.rfile.read(size)\n        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(json.dumps({"answers": {"refund": {"type": "noul", "noul": 0.96}}}).encode())\n    def log_message(self, *args): pass\nThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()\n`, "utf8");
+  const launcher = process.env.MODELCTL_PYTHON || (process.platform === "win32" ? "python" : "python3");
+  const previousPython = process.env.MODELCTL_PYTHON;
+  const previousAdapter = process.env.MODELCTL_LAYA_ADAPTER;
+  process.env.MODELCTL_PYTHON = launcher;
+  process.env.MODELCTL_LAYA_ADAPTER = adapterScript;
+  try {
+    await request("/v1/capabilities", "POST", capability);
+    await updateState((state) => {
+      state.models[idFor("convaiinnovations/laya", "0.3.18", "english")] = {
+        id: "convaiinnovations/laya", version: "0.3.18", revision: "cf7c54c0586eede67d827dfaab8cd2d2007273e",
+        variant: "english", path: root, installed_at: new Date().toISOString(),
+      };
+    });
+    const result = await request("/v1/capabilities/refund-check/invoke", "POST", { input: { text: "Please refund this order" } });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.equal(result.body.output.refund.value, 0.96);
+    const instances = await request("/v1/instances");
+    const started = instances.body.items.find((instance) => instance.status === "ready" && instance.model.variant === "english");
+    assert.ok(started, JSON.stringify(instances.body.items));
+    const stopped = await request(`/v1/instances/${started.id}`, "DELETE");
+    assert.equal(stopped.status, 200);
+  } finally {
+    if (previousPython === undefined) delete process.env.MODELCTL_PYTHON; else process.env.MODELCTL_PYTHON = previousPython;
+    if (previousAdapter === undefined) delete process.env.MODELCTL_LAYA_ADAPTER; else process.env.MODELCTL_LAYA_ADAPTER = previousAdapter;
+    await fsp.rm(fakeDir, { recursive: true, force: true });
+  }
+});
+
 test("capability metadata must be an object", async () => {
   await request("/v1/capabilities", "POST", capability);
   const result = await request("/v1/capabilities/refund-check/invoke", "POST", { input: { text: "Please refund this order" }, metadata: ["T-100"] });
