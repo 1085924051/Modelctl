@@ -53,6 +53,7 @@ async function route(req, res, rid, baseUrl) {
   if (req.method === "POST" && invokeCapabilityMatch) return invokeCapability(invokeCapabilityMatch[1], req, res);
   const runMatch = pathname.match(/^\/v1\/runs\/([^/]+)$/);
   if (req.method === "GET" && runMatch) return getRun(runMatch[1], res);
+  if (req.method === "GET" && pathname === "/v1/runs") return listRuns(res);
   if (req.method === "GET" && pathname === "/v1/mcp/config") return getMcpConfig(res, baseUrl);
   if (req.method === "PUT" && pathname === "/v1/mcp/config") return putMcpConfig(req, res, baseUrl);
   if (req.method === "GET" && pathname === "/v1/models") {
@@ -354,6 +355,7 @@ async function invokeCapability(id, req, res) {
 }
 
 async function getRun(id, res) { const state = await readState(); const run = state.runs[id]; if (!run) throw apiError(404, "RUN_NOT_FOUND", "run not found"); return jsonResponse(res, 200, run); }
+async function listRuns(res) { const state = await readState(); const items = Object.values(state.runs || {}).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))).slice(0, 100); return jsonResponse(res, 200, { items }); }
 
 async function freePort() { const net = await import("node:net"); return new Promise((resolve, reject) => { const s = net.createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => resolve(p)); }); s.on("error", reject); }); }
 

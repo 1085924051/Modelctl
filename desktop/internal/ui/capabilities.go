@@ -34,20 +34,20 @@ func (d *Desktop) renderCapabilities() {
 	}
 	modelSelect := widget.NewSelect(modelOptions, nil)
 	if len(modelOptions) > 0 { modelSelect.SetSelected(modelOptions[0]) }
-	questionID := widget.NewEntry()
-	questionID.SetText("decision")
-	questionType := widget.NewSelect([]string{"noul", "choice", "score"}, nil)
-	questionType.SetSelected("noul")
-	instructions := widget.NewEntry()
-	instructions.SetPlaceHolder("What should the model decide?")
-	criteria := widget.NewMultiLineEntry()
-	criteria.SetPlaceHolder("choice: one key: description per line; score: one level per line")
+	questionRows := []*capabilityQuestionEditor{}
+	questionList := container.NewVBox()
+	addQuestion := func() {
+		row := newCapabilityQuestionEditor(len(questionRows) + 1)
+		questionRows = append(questionRows, row)
+		questionList.Add(row.view)
+	}
+	addQuestion()
 	status := widget.NewLabel("")
 
 	create := widget.NewButton("Publish capability", func() {
 		selected, ok := modelByLabel[modelSelect.Selected]
 		if !ok { status.SetText("Load a model before publishing a capability."); return }
-		questions, err := buildCapabilityQuestion(questionID.Text, questionType.Selected, instructions.Text, criteria.Text)
+		questions, err := buildCapabilityQuestions(questionRows)
 		if err != nil { status.SetText(err.Error()); return }
 		capability := api.Capability{
 			ID: strings.TrimSpace(id.Text), Name: strings.TrimSpace(name.Text), Description: strings.TrimSpace(description.Text),
@@ -68,10 +68,8 @@ func (d *Desktop) renderCapabilities() {
 		widget.NewLabel("Display name"), name,
 		widget.NewLabel("Description"), description,
 		widget.NewLabel("Model"), modelSelect,
-		widget.NewLabel("Question ID"), questionID,
-		widget.NewLabel("Question type"), questionType,
-		widget.NewLabel("Instructions"), instructions,
-		widget.NewLabel("Criteria"), criteria,
+		container.NewBorder(nil, nil, widget.NewLabel("Questions"), widget.NewButton("Add question", addQuestion)),
+		questionList,
 		container.NewHBox(create, status),
 	))
 	box.Add(form)
@@ -113,6 +111,48 @@ func (d *Desktop) renderCapabilities() {
 	}
 	d.page.Content = container.NewVScroll(box)
 	d.page.Refresh()
+}
+
+type capabilityQuestionEditor struct {
+	id           *widget.Entry
+	kind         *widget.Select
+	instructions *widget.Entry
+	criteria     *widget.MultiLineEntry
+	view         fyne.CanvasObject
+}
+
+func newCapabilityQuestionEditor(index int) *capabilityQuestionEditor {
+	row := &capabilityQuestionEditor{
+		id: widget.NewEntry(), kind: widget.NewSelect([]string{"noul", "choice", "score"}, nil),
+		instructions: widget.NewEntry(), criteria: widget.NewMultiLineEntry(),
+	}
+	row.id.SetText(fmt.Sprintf("decision_%d", index))
+	row.instructions.SetPlaceHolder("What should the model decide?")
+	row.criteria.SetPlaceHolder("choice: one key: description per line; score: one level per line")
+	row.kind.SetSelected("noul")
+	row.kind.OnChanged = func(kind string) {
+		if kind == "noul" { row.criteria.Hide() } else { row.criteria.Show() }
+	}
+	row.view = widget.NewCard("Question "+fmt.Sprint(index), "", container.NewVBox(
+		container.NewGridWithColumns(2, widget.NewLabel("ID"), row.id, widget.NewLabel("Type"), row.kind),
+		widget.NewLabel("Instructions"), row.instructions,
+		widget.NewLabel("Criteria"), row.criteria,
+	))
+	return row
+}
+
+func buildCapabilityQuestions(rows []*capabilityQuestionEditor) (map[string]api.Question, error) {
+	questions := make(map[string]api.Question, len(rows))
+	for _, row := range rows {
+		id, kind, instructions := strings.TrimSpace(row.id.Text), row.kind.Selected, strings.TrimSpace(row.instructions.Text)
+		if id == "" || instructions == "" { return nil, fmt.Errorf("each question needs an ID and instructions") }
+		if _, exists := questions[id]; exists { return nil, fmt.Errorf("duplicate question ID: %s", id) }
+		one, err := buildCapabilityQuestion(id, kind, instructions, row.criteria.Text)
+		if err != nil { return nil, err }
+		for key, question := range one { questions[key] = question }
+	}
+	if len(questions) == 0 { return nil, fmt.Errorf("add at least one question") }
+	return questions, nil
 }
 
 func buildCapabilityQuestion(id, kind, instructions, criteria string) (map[string]api.Question, error) {

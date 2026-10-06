@@ -33,6 +33,7 @@ type Desktop struct {
 	models         []modelState
 	instances      []api.Instance
 	capabilities   []api.Capability
+	runs           []api.Run
 	selectedPage   string
 	refreshMu      sync.Mutex
 	playground     fyne.CanvasObject
@@ -83,6 +84,7 @@ func (d *Desktop) layout() fyne.CanvasObject {
 		widget.NewButton("Running", func() { d.showPage("running") }),
 		widget.NewButton("Playground", func() { d.showPage("playground") }),
 		widget.NewButton("Capabilities", func() { d.showPage("capabilities") }),
+		widget.NewButton("History", func() { d.showPage("history") }),
 		layout.NewSpacer(),
 		widget.NewLabel(d.client.BaseURL()),
 	)
@@ -98,6 +100,8 @@ func (d *Desktop) showPage(page string) {
 		d.renderPlayground()
 	case "capabilities":
 		d.renderCapabilities()
+	case "history":
+		d.renderHistory()
 	default:
 		d.renderModels()
 	}
@@ -127,6 +131,10 @@ func (d *Desktop) refresh() {
 		if capabilityErr != nil {
 			capabilities.Items = nil
 		}
+		runs, runsErr := d.client.Runs()
+		if runsErr != nil {
+			runs.Items = nil
+		}
 		states := make([]modelState, 0, len(models.Items))
 		for _, summary := range models.Items {
 			detail, detailErr := d.client.ModelDetail(summary.ID)
@@ -139,6 +147,7 @@ func (d *Desktop) refresh() {
 			d.models = mergeModelStates(d.models, states)
 			d.instances = instances.Items
 			d.capabilities = capabilities.Items
+			d.runs = runs.Items
 			d.status.SetText(fmt.Sprintf("Connected · %d model(s) · %d ready instance(s)", len(states), len(readyInstances(instances.Items))))
 			d.updateInstanceSelect()
 			d.showPage(d.selectedPage)

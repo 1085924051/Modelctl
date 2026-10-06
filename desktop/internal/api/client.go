@@ -284,6 +284,18 @@ func (c *Client) InvokeRawSystemOne(instanceID string, request json.RawMessage) 
 	return result, err
 }
 
+type Run struct {
+	ID                string            `json:"id"`
+	CapabilityID      string            `json:"capability_id"`
+	CapabilityVersion string            `json:"capability_version"`
+	InstanceID        string            `json:"instance_id"`
+	Input             map[string]any    `json:"input"`
+	Response          SystemOneResponse `json:"response"`
+	CreatedAt         string            `json:"created_at"`
+}
+
+type RunsResponse struct { Items []Run `json:"items"` }
+
 func (c *Client) Capabilities() (CapabilitiesResponse, error) {
 	var result CapabilitiesResponse
 	err := c.do(http.MethodGet, "/v1/capabilities", nil, &result)
@@ -299,6 +311,12 @@ func (c *Client) CreateCapability(capability Capability) (Capability, error) {
 func (c *Client) InvokeCapability(id string, request CapabilityInvokeRequest) (CapabilityInvokeResponse, error) {
 	var result CapabilityInvokeResponse
 	err := c.do(http.MethodPost, "/v1/capabilities/"+url.PathEscape(id)+"/invoke", request, &result)
+	return result, err
+}
+
+func (c *Client) Runs() (RunsResponse, error) {
+	var result RunsResponse
+	err := c.do(http.MethodGet, "/v1/runs", nil, &result)
 	return result, err
 }
 

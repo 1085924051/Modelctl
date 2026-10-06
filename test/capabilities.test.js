@@ -61,6 +61,12 @@ test("capabilities can be published and listed", async () => {
   assert.deepEqual(listed.body.items.map((item) => item.id), ["refund-check"]);
 });
 
+test("run history is available as a replayable collection", async () => {
+  const result = await request("/v1/runs");
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.items, []);
+});
+
 test("capability validation hides the raw protocol from invalid clients", async () => {
   const invalid = await request("/v1/capabilities", "POST", { id: "Bad ID", name: "x" });
   assert.equal(invalid.status, 422);
