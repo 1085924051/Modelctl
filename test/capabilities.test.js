@@ -70,6 +70,21 @@ test("run history is available as a replayable collection", async () => {
   assert.deepEqual(result.body.items, []);
 });
 
+test("capability versions can be published and activated explicitly", async () => {
+  const first = await request("/v1/capabilities", "POST", capability);
+  assert.equal(first.body.active, true);
+  const second = await request("/v1/capabilities", "POST", { ...capability, version: "1.1.0", name: "Refund check v2", activate: false });
+  assert.equal(second.status, 201);
+  assert.equal(second.body.active, false);
+  const current = await request("/v1/capabilities/refund-check");
+  assert.equal(current.body.version, "1.0.0");
+  const activated = await request("/v1/capabilities/refund-check/activate", "POST", { version: "1.1.0" });
+  assert.equal(activated.status, 200);
+  assert.equal(activated.body.version, "1.1.0");
+  const selected = await request("/v1/capabilities/refund-check?version=1.0.0");
+  assert.equal(selected.body.version, "1.0.0");
+});
+
 test("capability validation hides the raw protocol from invalid clients", async () => {
   const invalid = await request("/v1/capabilities", "POST", { id: "Bad ID", name: "x" });
   assert.equal(invalid.status, 422);

@@ -353,3 +353,15 @@ the rest of the batch continues.
 Returns machine-readable request and response schemas for SDK generation and
 contract tests. The schema is derived from the published capability input field
 and remains tied to its capability version.
+
+Capabilities are versioned. Publish a new version with `activate: false` to keep
+it available without changing the active contract. Select an explicit version by
+adding `?version=1.0.0` to invoke, batch, or schema requests. Switch the active
+version with:
+
+```http
+POST /v1/capabilities/refund-check/activate
+Content-Type: application/json
+
+{"version":"1.1.0"}
+```

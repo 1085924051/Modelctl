@@ -6,8 +6,9 @@ export class Modelctl {
     this.token = token;
   }
 
-  async invoke(capabilityId, input, metadata) {
-    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/invoke`, {
+  async invoke(capabilityId, input, metadata, version) {
+    const suffix = version ? `?version=${encodeURIComponent(version)}` : "";
+    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/invoke${suffix}`, {
       method: "POST",
       body: JSON.stringify({ input, ...(metadata ? { metadata } : {}) }),
     });
@@ -17,16 +18,18 @@ export class Modelctl {
     return (await this.request("/v1/capabilities")).items || [];
   }
 
-  async schema(capabilityId) {
-    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/schema`);
+  async schema(capabilityId, version) {
+    const suffix = version ? `?version=${encodeURIComponent(version)}` : "";
+    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/schema${suffix}`);
   }
 
   async runs() {
     return (await this.request("/v1/runs")).items || [];
   }
 
-  async batch(capabilityId, items) {
-    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/batch`, {
+  async batch(capabilityId, items, version) {
+    const suffix = version ? `?version=${encodeURIComponent(version)}` : "";
+    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/batch${suffix}`, {
       method: "POST",
       body: JSON.stringify({ items }),
     });

@@ -54,12 +54,12 @@ export async function ensureDirs() {
       const contents = await fsp.readdir(p.state);
       if (contents.length) throw new Error(`state path is a non-empty directory: ${p.state}`);
       await fsp.rmdir(p.state);
-      await atomicWrite(p.state, { models: {}, tasks: {}, instances: {}, capabilities: {}, runs: {}, events: [] });
+      await atomicWrite(p.state, { models: {}, tasks: {}, instances: {}, capabilities: {}, capability_versions: {}, runs: {}, events: [] });
     } else if (!stat.isFile()) {
       throw new Error(`state path is not a file: ${p.state}`);
     }
   } else {
-    await atomicWrite(p.state, { models: {}, tasks: {}, instances: {}, capabilities: {}, runs: {}, events: [] });
+    await atomicWrite(p.state, { models: {}, tasks: {}, instances: {}, capabilities: {}, capability_versions: {}, runs: {}, events: [] });
   }
 }
 
@@ -199,6 +199,13 @@ export async function readState() {
   await ensureDirs();
   const state = JSON.parse(await fsp.readFile(paths().state, "utf8"));
   if (!state.capabilities || typeof state.capabilities !== "object") state.capabilities = {};
+  if (!state.capability_versions || typeof state.capability_versions !== "object") state.capability_versions = {};
+  for (const [id, capability] of Object.entries(state.capabilities)) {
+    if (capability?.version && capability?.model) {
+      state.capability_versions[id] ||= {};
+      state.capability_versions[id][capability.version] ||= capability;
+    }
+  }
   if (!state.runs || typeof state.runs !== "object") state.runs = {};
   return state;
 }

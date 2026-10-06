@@ -322,21 +322,27 @@ func (c *Client) CreateCapability(capability Capability) (Capability, error) {
 	return result, err
 }
 
-func (c *Client) InvokeCapability(id string, request CapabilityInvokeRequest) (CapabilityInvokeResponse, error) {
+func (c *Client) InvokeCapability(id string, request CapabilityInvokeRequest, version ...string) (CapabilityInvokeResponse, error) {
 	var result CapabilityInvokeResponse
-	err := c.do(http.MethodPost, "/v1/capabilities/"+url.PathEscape(id)+"/invoke", request, &result)
+	path := "/v1/capabilities/"+url.PathEscape(id)+"/invoke"
+	if len(version) > 0 && version[0] != "" { path += "?version=" + url.QueryEscape(version[0]) }
+	err := c.do(http.MethodPost, path, request, &result)
 	return result, err
 }
 
-func (c *Client) CreateCapabilityBatch(id string, items []CapabilityInvokeRequest) (CapabilityBatchResponse, error) {
+func (c *Client) CreateCapabilityBatch(id string, items []CapabilityInvokeRequest, version ...string) (CapabilityBatchResponse, error) {
 	var result CapabilityBatchResponse
-	err := c.do(http.MethodPost, "/v1/capabilities/"+url.PathEscape(id)+"/batch", map[string]any{"items": items}, &result)
+	path := "/v1/capabilities/"+url.PathEscape(id)+"/batch"
+	if len(version) > 0 && version[0] != "" { path += "?version=" + url.QueryEscape(version[0]) }
+	err := c.do(http.MethodPost, path, map[string]any{"items": items}, &result)
 	return result, err
 }
 
-func (c *Client) CapabilitySchema(id string) (CapabilitySchema, error) {
+func (c *Client) CapabilitySchema(id string, version ...string) (CapabilitySchema, error) {
 	var result CapabilitySchema
-	err := c.do(http.MethodGet, "/v1/capabilities/"+url.PathEscape(id)+"/schema", nil, &result)
+	path := "/v1/capabilities/"+url.PathEscape(id)+"/schema"
+	if len(version) > 0 && version[0] != "" { path += "?version=" + url.QueryEscape(version[0]) }
+	err := c.do(http.MethodGet, path, nil, &result)
 	return result, err
 }
 

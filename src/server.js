@@ -48,13 +48,15 @@ async function route(req, res, rid, baseUrl) {
   if (req.method === "GET" && pathname === "/v1/capabilities") return listCapabilities(res);
   if (req.method === "POST" && pathname === "/v1/capabilities") return createCapability(req, res);
   const capabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)$/);
-  if (req.method === "GET" && capabilityMatch) return getCapability(capabilityMatch[1], res);
+  if (req.method === "GET" && capabilityMatch) return getCapability(capabilityMatch[1], url.searchParams.get("version"), res);
   const capabilitySchemaMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/schema$/);
-  if (req.method === "GET" && capabilitySchemaMatch) return getCapabilitySchema(capabilitySchemaMatch[1], res);
+  if (req.method === "GET" && capabilitySchemaMatch) return getCapabilitySchema(capabilitySchemaMatch[1], url.searchParams.get("version"), res);
   const invokeCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/invoke$/);
-  if (req.method === "POST" && invokeCapabilityMatch) return invokeCapability(invokeCapabilityMatch[1], req, res);
+  if (req.method === "POST" && invokeCapabilityMatch) return invokeCapability(invokeCapabilityMatch[1], url.searchParams.get("version"), req, res);
   const batchCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/batch$/);
-  if (req.method === "POST" && batchCapabilityMatch) return createCapabilityBatch(batchCapabilityMatch[1], req, res);
+  if (req.method === "POST" && batchCapabilityMatch) return createCapabilityBatch(batchCapabilityMatch[1], url.searchParams.get("version"), req, res);
+  const activateCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/activate$/);
+  if (req.method === "POST" && activateCapabilityMatch) return activateCapability(activateCapabilityMatch[1], req, res);
   const runMatch = pathname.match(/^\/v1\/runs\/([^/]+)$/);
   if (req.method === "GET" && runMatch) return getRun(runMatch[1], res);
   if (req.method === "GET" && pathname === "/v1/runs") return listRuns(res);
@@ -342,10 +344,20 @@ function validateCapability(body) {
   return { schema_version: 1, id: body.id, version, name: body.name.trim(), description: body.description.trim(), model: { model_id: body.model.model_id, version: body.model.version || undefined, variant: body.model.variant, profile: body.model.profile || "auto" }, input: body.input && typeof body.input === "object" ? body.input : { type: "text", field: "text" }, questions: body.questions, created_at: body.created_at || new Date().toISOString(), updated_at: new Date().toISOString() };
 }
 
-async function listCapabilities(res) { const state = await readState(); return jsonResponse(res, 200, { items: Object.values(state.capabilities || {}).sort((a, b) => a.id.localeCompare(b.id)) }); }
-async function getCapability(id, res) { const state = await readState(); const item = state.capabilities[id]; if (!item) throw apiError(404, "CAPABILITY_NOT_FOUND", "capability not found"); return jsonResponse(res, 200, item); }
-async function getCapabilitySchema(id, res) {
-  const state = await readState(); const capability = state.capabilities[id]; if (!capability) throw apiError(404, "CAPABILITY_NOT_FOUND", "capability not found");
+function resolveCapability(state, id, version) {
+  const item = version ? state.capability_versions?.[id]?.[version] : state.capabilities?.[id];
+  if (!item) throw apiError(404, "CAPABILITY_NOT_FOUND", version ? `capability ${id}@${version} not found` : "capability not found");
+  return item;
+}
+
+async function listCapabilities(res) {
+  const state = await readState();
+  const items = Object.values(state.capabilities || {}).sort((a, b) => a.id.localeCompare(b.id)).map((item) => ({ ...item, active: true, available_versions: Object.keys(state.capability_versions?.[item.id] || {}).sort() }));
+  return jsonResponse(res, 200, { items });
+}
+async function getCapability(id, version, res) { const state = await readState(); const item = resolveCapability(state, id, version); return jsonResponse(res, 200, { ...item, active: state.capabilities[id]?.version === item.version, available_versions: Object.keys(state.capability_versions?.[id] || {}).sort() }); }
+async function getCapabilitySchema(id, version, res) {
+  const state = await readState(); const capability = resolveCapability(state, id, version);
   const field = capability.input?.field || "text";
   return jsonResponse(res, 200, {
     capability: { id: capability.id, version: capability.version, name: capability.name },
@@ -353,14 +365,24 @@ async function getCapabilitySchema(id, res) {
     response_schema: { type: "object", required: ["output", "run_id"], properties: { output: { type: "object" }, raw: { type: "object" }, model: { type: "object" }, run_id: { type: "string" } } },
   });
 }
-async function createCapability(req, res) { const capability = validateCapability(await readJson(req)); await updateState((state) => { state.capabilities[capability.id] = capability; }); return jsonResponse(res, 201, capability); }
-
-async function invokeCapability(id, req, res) {
-  return jsonResponse(res, 200, await executeCapability(id, objectBody(await readJson(req))));
+async function createCapability(req, res) {
+  const body = objectBody(await readJson(req)); const activate = body.activate !== false; const capability = validateCapability(body);
+  await updateState((state) => { state.capability_versions[capability.id] ||= {}; state.capability_versions[capability.id][capability.version] = capability; if (activate || !state.capabilities[capability.id]) state.capabilities[capability.id] = capability; });
+  const state = await readState(); return jsonResponse(res, 201, { ...capability, active: state.capabilities[capability.id]?.version === capability.version, available_versions: Object.keys(state.capability_versions[capability.id]).sort() });
 }
 
-async function executeCapability(id, body) {
-  const state = await readState(); const capability = state.capabilities[id]; if (!capability) throw apiError(404, "CAPABILITY_NOT_FOUND", "capability not found");
+async function activateCapability(id, req, res) {
+  const body = objectBody(await readJson(req)); if (typeof body.version !== "string" || !body.version.trim()) throw apiError(422, "CAPABILITY_VERSION_INVALID", "version is required");
+  await updateState((state) => { const capability = state.capability_versions?.[id]?.[body.version]; if (!capability) throw apiError(404, "CAPABILITY_NOT_FOUND", `capability ${id}@${body.version} not found`); state.capabilities[id] = capability; });
+  return getCapability(id, body.version, res);
+}
+
+async function invokeCapability(id, version, req, res) {
+  return jsonResponse(res, 200, await executeCapability(id, version, objectBody(await readJson(req))));
+}
+
+async function executeCapability(id, version, body) {
+  const state = await readState(); const capability = resolveCapability(state, id, version);
   const input = objectBody(body.input || body); const field = capability.input?.field || "text"; const text = input[field];
   if (typeof text !== "string" || !text.trim()) throw apiError(422, "INPUT_INVALID", `${field} must be a non-empty string`);
   const ready = Object.values(state.instances).filter((instance) => instance.status === "ready" && instance.capabilities?.includes("system_one") && instance.model?.id === capability.model.model_id && instance.model?.variant === capability.model.variant);
@@ -371,21 +393,21 @@ async function executeCapability(id, body) {
   return { request_id: run.id, capability: { id: capability.id, version: capability.version }, output: response.answers || response, raw: response, model: selected.model, run_id: run.id };
 }
 
-async function createCapabilityBatch(id, req, res) {
+async function createCapabilityBatch(id, version, req, res) {
   const body = objectBody(await readJson(req));
   if (!Array.isArray(body.items) || body.items.length === 0 || body.items.length > 1000) throw apiError(422, "BATCH_INVALID", "items must contain between 1 and 1000 inputs");
-  const state = await readState(); if (!state.capabilities[id]) throw apiError(404, "CAPABILITY_NOT_FOUND", "capability not found");
+  const state = await readState(); resolveCapability(state, id, version);
   const taskId = newId("task");
   await updateState((next) => { next.tasks[taskId] = { id: taskId, kind: "capability_batch", status: "queued", capability_id: id, progress: { items_done: 0, items_total: body.items.length }, results: [], errors: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; });
-  void processCapabilityBatch(taskId, id, body.items).catch(() => undefined);
+  void processCapabilityBatch(taskId, id, version, body.items).catch(() => undefined);
   return jsonResponse(res, 202, { task_id: taskId, status: "queued", poll: `/v1/tasks/${taskId}` });
 }
 
-async function processCapabilityBatch(taskId, id, items) {
+async function processCapabilityBatch(taskId, id, version, items) {
   await updateState((state) => { if (state.tasks[taskId]) { state.tasks[taskId].status = "running"; state.tasks[taskId].started_at = new Date().toISOString(); } });
   for (let index = 0; index < items.length; index += 1) {
     const current = (await readState()).tasks[taskId]; if (!current || current.status === "cancelled") return;
-    try { const result = await executeCapability(id, objectBody(items[index])); await updateState((state) => { const task = state.tasks[taskId]; if (task) { task.results.push({ index, run_id: result.run_id, request_id: result.request_id }); task.progress.items_done = index + 1; task.updated_at = new Date().toISOString(); } }); }
+    try { const result = await executeCapability(id, version, objectBody(items[index])); await updateState((state) => { const task = state.tasks[taskId]; if (task) { task.results.push({ index, run_id: result.run_id, request_id: result.request_id }); task.progress.items_done = index + 1; task.updated_at = new Date().toISOString(); } }); }
     catch (error) { await updateState((state) => { const task = state.tasks[taskId]; if (task) { task.errors.push({ index, code: error.code || "BATCH_ITEM_FAILED", message: error.message }); task.progress.items_done = index + 1; task.updated_at = new Date().toISOString(); } }); }
   }
   await updateState((state) => { const task = state.tasks[taskId]; if (task && task.status !== "cancelled") { task.status = "succeeded"; task.finished_at = new Date().toISOString(); task.updated_at = task.finished_at; } });

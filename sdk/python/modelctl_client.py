@@ -15,23 +15,26 @@ class Modelctl:
         self.base_url = base_url.rstrip("/")
         self.token = token
 
-    def invoke(self, capability_id: str, input: dict, metadata: dict | None = None) -> dict:
+    def invoke(self, capability_id: str, input: dict, metadata: dict | None = None, version: str | None = None) -> dict:
         body = {"input": input}
         if metadata:
             body["metadata"] = metadata
-        return self._request("POST", f"/v1/capabilities/{capability_id}/invoke", body)
+        suffix = f"?version={version}" if version else ""
+        return self._request("POST", f"/v1/capabilities/{capability_id}/invoke{suffix}", body)
 
     def capabilities(self) -> list[dict]:
         return self._request("GET", "/v1/capabilities").get("items", [])
 
-    def schema(self, capability_id: str) -> dict:
-        return self._request("GET", f"/v1/capabilities/{capability_id}/schema")
+    def schema(self, capability_id: str, version: str | None = None) -> dict:
+        suffix = f"?version={version}" if version else ""
+        return self._request("GET", f"/v1/capabilities/{capability_id}/schema{suffix}")
 
     def runs(self) -> list[dict]:
         return self._request("GET", "/v1/runs").get("items", [])
 
-    def batch(self, capability_id: str, items: list[dict]) -> dict:
-        return self._request("POST", f"/v1/capabilities/{capability_id}/batch", {"items": items})
+    def batch(self, capability_id: str, items: list[dict], version: str | None = None) -> dict:
+        suffix = f"?version={version}" if version else ""
+        return self._request("POST", f"/v1/capabilities/{capability_id}/batch{suffix}", {"items": items})
 
     def _request(self, method: str, path: str, body: dict | None = None) -> dict:
         payload = None if body is None else json.dumps(body).encode("utf-8")
