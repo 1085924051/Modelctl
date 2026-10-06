@@ -103,3 +103,14 @@ The response contains a stable capability version, typed answers, model metadata
 and a replayable run id. Business applications should call this endpoint or use a
 small SDK generated from the capability contract. They should not read the model
 store or construct Laya `state/questions` payloads themselves.
+
+The Capabilities page lets an administrator publish semantic versions, keep a
+version inactive for testing, activate a version, run single or batch samples,
+copy REST/SDK examples, and replay a historical run. After a model variant is
+downloaded, the first capability request starts its matching runtime
+automatically. If the variant is missing, the API reports the exact model and
+variant that must be downloaded.
+
+The self-contained Windows launcher starts `Modelctl.exe` directly. The desktop
+Supervisor verifies and starts the bundled Node/Python runtime, so a packaged
+installation does not require a global `modelctl`, Node.js, or Python command.
