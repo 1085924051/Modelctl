@@ -74,6 +74,25 @@ func TestClientReturnsStructuredHTTPError(t *testing.T) {
 	}
 }
 
+func TestClientSendsBearerTokenAndCancelsTask(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer secret" {
+			t.Fatalf("authorization = %q", got)
+		}
+		if r.URL.Path != "/v1/tasks/task_1/cancel" || r.Method != http.MethodPost {
+			t.Fatalf("cancel request = %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(Task{ID: "task_1", Status: "cancelled"})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL)
+	client.SetToken("secret")
+	task, err := client.CancelTask("task_1")
+	if err != nil || task.Status != "cancelled" {
+		t.Fatalf("CancelTask() = %#v, %v", task, err)
+	}
+}
+
 func TestSystemOneRequestEncodesScoreLevelsAsArray(t *testing.T) {
 	request := SystemOneRequest{
 		State: State{Body: "The customer needs a refund."},
