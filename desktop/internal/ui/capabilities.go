@@ -81,6 +81,21 @@ func (d *Desktop) renderCapabilities() {
 		box.Add(widget.NewLabelWithStyle("Published capabilities", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 		for _, capability := range d.capabilities {
 			capability := capability
+			versionStatus := widget.NewLabel("Active: "+capability.Version)
+			versionButtons := container.NewHBox()
+			for _, version := range capability.AvailableVersions {
+				version := version
+				if version == capability.Version { continue }
+				var button *widget.Button
+				button = widget.NewButton("Activate "+version, func() {
+					button.Disable()
+					go func() {
+						_, err := d.client.ActivateCapability(capability.ID, version)
+						fyne.Do(func() { if err != nil { versionStatus.SetText(err.Error()) } else { versionStatus.SetText("Active: "+version); d.refresh() } })
+					}()
+				})
+				versionButtons.Add(button)
+			}
 			testInput := widget.NewMultiLineEntry()
 			testInput.SetText("The customer was charged twice and wants a refund.")
 			testInput.SetMinRowsVisible(3)
@@ -124,6 +139,8 @@ func (d *Desktop) renderCapabilities() {
 			box.Add(widget.NewCard(capability.Name, capability.ID+" v"+capability.Version, container.NewVBox(
 				widget.NewLabel(capability.Description),
 				widget.NewLabel(fmt.Sprintf("Model: %s · %s · %s", capability.Model.ModelID, capability.Model.Variant, capability.Model.Profile)),
+				versionStatus,
+				versionButtons,
 				widget.NewLabel("Test input"),
 				testInput,
 				container.NewHBox(testButton, testStatus),
@@ -198,5 +215,5 @@ func buildCapabilityQuestion(id, kind, instructions, criteria string) (map[strin
 func capabilitySnippet(baseURL, id string) string {
 	payload, _ := json.Marshal(map[string]any{"input": map[string]string{"text": "your text here"}})
 	endpoint := fmt.Sprintf("%s/v1/capabilities/%s/invoke", baseURL, id)
-	return fmt.Sprintf("POST %s\nContent-Type: application/json\n\n%s\n\nPython: requests.post(%q, json=%s)", endpoint, string(payload), endpoint, string(payload))
+	return fmt.Sprintf("POST %s\nAuthorization: Bearer $MODELCTL_API_TOKEN\nContent-Type: application/json\n\n%s\n\nPython: requests.post(%q, headers={\"Authorization\": \"Bearer \" + token}, json=%s)", endpoint, string(payload), endpoint, string(payload))
 }

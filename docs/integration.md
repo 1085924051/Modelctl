@@ -4,6 +4,20 @@ Modelctl is the deployment and capability layer. Application code calls a
 published capability; it does not read model files or build Laya `state` and
 `questions` payloads.
 
+## Choose the operating mode
+
+| Scenario | Where Modelctl runs | How the application calls it |
+| --- | --- | --- |
+| Individual developer, local prototype | The developer's computer | `http://127.0.0.1:11435` with REST, Python, or JavaScript SDK |
+| Desktop product with an on-device AI feature | The end user's computer | The product calls the local capability endpoint through an app-side HTTP client |
+| Internal enterprise service | A GPU/CPU host inside the company network | HTTPS through the internal gateway, with a bearer token and a capability ID |
+| Async document or ticket processing | An internal Modelctl host | Submit `/batch`, poll the task, then store each run result in the business database |
+
+The business system owns users, permissions, queues, and domain data. Modelctl
+owns model lifecycle, adapter processes, capability contracts, and inference
+execution. This boundary lets a model or prompt change without rewriting every
+business integration.
+
 ## Local developer mode
 
 1. Open Modelctl Desktop.
@@ -22,6 +36,19 @@ Content-Type: application/json
 The client receives a stable capability version, typed answers, model metadata,
 and a replayable run id.
 
+For a first integration, the shortest path is:
+
+```bash
+curl http://127.0.0.1:11435/v1/capabilities
+curl -X POST http://127.0.0.1:11435/v1/capabilities/refund-check/invoke \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"text":"The customer was charged twice."}}'
+```
+
+Use `GET /v1/capabilities/{id}/schema` before generating a form, validating a
+queue message, or writing a contract test. Use `?version=1.0.0` when a service
+needs a pinned contract during a gradual rollout.
+
 ## Enterprise server mode
 
 Run Modelctl on an internal inference host. Remote binding is opt-in and
@@ -36,6 +63,17 @@ node bin/modelctl.js daemon
 Put the service behind the enterprise TLS gateway. Business applications send
 the token in an `Authorization: Bearer` header. Keep adapter ports and the model
 store private to the Modelctl host.
+
+The desktop Settings page can apply a remote URL and token for administration.
+Business services should inject their token from the company's secret manager:
+
+```bash
+export MODELCTL_API_TOKEN='read-from-secret-manager'
+curl https://modelctl.internal.example/v1/capabilities/refund-check/invoke \
+  -H "Authorization: Bearer $MODELCTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"text":"The customer was charged twice."}}'
+```
 
 ## Capability contract
 
@@ -58,3 +96,25 @@ breaking production integrations.
 - MCP: AI agents and desktop developer tools.
 
 The desktop console is the administration and test surface for all three modes.
+
+## Common application patterns
+
+### Synchronous request/response
+
+Use one capability invocation inside an API request, such as ticket routing,
+refund intent detection, document triage, or a finance risk check. Store the
+returned `run_id` with the business record so an operator can replay the exact
+capability version and model instance from Desktop History.
+
+### Batch processing
+
+Use `/v1/capabilities/{id}/batch` for imports, nightly jobs, or queues. Each
+item has the same input shape as a single call. Poll the task URL and persist
+successful results by item index; a failed item does not cancel the rest of the
+batch.
+
+### Contract rollout
+
+Publish `1.1.0` with `activate: false`, run it against a sample batch, then
+activate it when the output contract is accepted. Existing callers continue to
+use the active version until they opt into the new version.

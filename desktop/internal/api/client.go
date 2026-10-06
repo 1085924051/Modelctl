@@ -32,6 +32,19 @@ func NewClient(baseURL string) *Client {
 
 func (c *Client) BaseURL() string { return c.baseURL }
 
+func (c *Client) SetBaseURL(baseURL string) {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL != "" {
+		c.baseURL = strings.TrimRight(baseURL, "/")
+	}
+}
+
+// SetToken updates the bearer token used by subsequent requests. The desktop
+// settings view keeps it in memory for the current session.
+func (c *Client) SetToken(token string) { c.token = strings.TrimSpace(token) }
+
+func (c *Client) HasToken() bool { return c.token != "" }
+
 type ModelSummary struct {
 	ID                string   `json:"id"`
 	Version           string   `json:"version"`
@@ -194,6 +207,8 @@ type Capability struct {
 	Questions     map[string]Question    `json:"questions"`
 	CreatedAt     string                 `json:"created_at"`
 	UpdatedAt     string                 `json:"updated_at"`
+	Active        bool                   `json:"active"`
+	AvailableVersions []string            `json:"available_versions"`
 }
 
 type CapabilitiesResponse struct { Items []Capability `json:"items"` }
@@ -319,6 +334,12 @@ func (c *Client) Capabilities() (CapabilitiesResponse, error) {
 func (c *Client) CreateCapability(capability Capability) (Capability, error) {
 	var result Capability
 	err := c.do(http.MethodPost, "/v1/capabilities", capability, &result)
+	return result, err
+}
+
+func (c *Client) ActivateCapability(id, version string) (Capability, error) {
+	var result Capability
+	err := c.do(http.MethodPost, "/v1/capabilities/"+url.PathEscape(id)+"/activate", map[string]any{"version": version}, &result)
 	return result, err
 }
 

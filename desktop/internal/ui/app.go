@@ -85,6 +85,7 @@ func (d *Desktop) layout() fyne.CanvasObject {
 		widget.NewButton("Playground", func() { d.showPage("playground") }),
 		widget.NewButton("Capabilities", func() { d.showPage("capabilities") }),
 		widget.NewButton("History", func() { d.showPage("history") }),
+		widget.NewButton("Settings", func() { d.showPage("settings") }),
 		layout.NewSpacer(),
 		widget.NewLabel(d.client.BaseURL()),
 	)
@@ -102,6 +103,8 @@ func (d *Desktop) showPage(page string) {
 		d.renderCapabilities()
 	case "history":
 		d.renderHistory()
+	case "settings":
+		d.renderSettings()
 	default:
 		d.renderModels()
 	}
