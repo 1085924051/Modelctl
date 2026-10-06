@@ -397,13 +397,14 @@ async function executeCapability(id, version, body) {
   const state = await readState(); const capability = resolveCapability(state, id, version);
   const input = objectBody(body.input || body); const field = capability.input?.field || "text"; const text = input[field];
   if (typeof text !== "string" || !text.trim()) throw apiError(422, "INPUT_INVALID", `${field} must be a non-empty string`);
+  const metadata = body.metadata === undefined ? undefined : objectBody(body.metadata);
   const ready = matchingCapabilityInstances(state, capability);
   let selected = ready.find((instance) => instance.default) || ready[0];
   if (!selected) selected = await ensureCapabilityInstance(capability);
   const response = await invokeInstanceBody(selected.id, "system_one", { state: { body: text.trim() }, questions: capability.questions });
-  const run = { id: newId("run"), capability_id: capability.id, capability_version: capability.version, instance_id: selected.id, input: { [field]: text.trim() }, response, created_at: new Date().toISOString() };
+  const run = { id: newId("run"), capability_id: capability.id, capability_version: capability.version, instance_id: selected.id, input: { [field]: text.trim() }, ...(metadata ? { metadata } : {}), response, created_at: new Date().toISOString() };
   await updateState((next) => { next.runs[run.id] = run; });
-  return { request_id: run.id, capability: { id: capability.id, version: capability.version }, output: response.answers || response, raw: response, model: selected.model, run_id: run.id };
+  return { request_id: run.id, capability: { id: capability.id, version: capability.version }, output: response.answers || response, raw: response, model: selected.model, ...(metadata ? { metadata } : {}), run_id: run.id };
 }
 
 function matchingCapabilityInstances(state, capability) {

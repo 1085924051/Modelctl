@@ -30,7 +30,7 @@ business integration.
 POST http://127.0.0.1:11435/v1/capabilities/refund-check/invoke
 Content-Type: application/json
 
-{"input":{"text":"The customer was charged twice and wants a refund."}}
+{"input":{"text":"The customer was charged twice and wants a refund."},"metadata":{"ticket_id":"T-100"}}
 ```
 
 The client receives a stable capability version, typed answers, model metadata,
@@ -117,6 +117,9 @@ Use one capability invocation inside an API request, such as ticket routing,
 refund intent detection, document triage, or a finance risk check. Store the
 returned `run_id` with the business record so an operator can replay the exact
 capability version and model instance from Desktop History.
+The optional `metadata` object is stored with the run and returned in the
+response, which lets a tenant, ticket, or document ID stay attached to the
+inference record without being sent to the model as text.
 
 ### Batch processing
 

@@ -113,6 +113,13 @@ test("capability invocation explains that its model must be downloaded", async (
   assert.equal(result.body.error.code, "MODEL_NOT_INSTALLED");
 });
 
+test("capability metadata must be an object", async () => {
+  await request("/v1/capabilities", "POST", capability);
+  const result = await request("/v1/capabilities/refund-check/invoke", "POST", { input: { text: "Please refund this order" }, metadata: ["T-100"] });
+  assert.equal(result.status, 400);
+  assert.equal(result.body.error.code, "INVALID_REQUEST");
+});
+
 test("capability batches return a task that records per-item errors", async () => {
   await request("/v1/capabilities", "POST", capability);
   const created = await request("/v1/capabilities/refund-check/batch", "POST", { items: [{ input: { text: "one" } }, { input: { text: "two" } }] });

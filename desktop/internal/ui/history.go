@@ -27,7 +27,7 @@ func (d *Desktop) renderHistory() {
 				rerun.Disable()
 				status.SetText("Running...")
 				go func() {
-					result, err := d.client.InvokeCapability(run.CapabilityID, api.CapabilityInvokeRequest{Input: run.Input}, run.CapabilityVersion)
+					result, err := d.client.InvokeCapability(run.CapabilityID, api.CapabilityInvokeRequest{Input: run.Input, Metadata: run.Metadata}, run.CapabilityVersion)
 					fyne.Do(func() {
 						rerun.Enable()
 						if err != nil { status.SetText(err.Error()); return }
@@ -42,6 +42,7 @@ func (d *Desktop) renderHistory() {
 				container.NewVBox(
 				widget.NewLabel(fmt.Sprintf("Run %s · instance %s", run.ID, run.InstanceID)),
 				widget.NewLabel("Input: "+runInputText(run.Input)),
+				metadataLabel(run.Metadata),
 				container.NewHBox(rerun, status),
 				widget.NewAccordion(widget.NewAccordionItem("Raw result", widget.NewLabel(string(raw)))),
 				),
@@ -56,4 +57,10 @@ func runInputText(input map[string]any) string {
 	if text, ok := input["text"].(string); ok { return text }
 	payload, _ := json.Marshal(input)
 	return string(payload)
+}
+
+func metadataLabel(metadata map[string]any) fyne.CanvasObject {
+	if len(metadata) == 0 { return widget.NewLabel("") }
+	payload, _ := json.Marshal(metadata)
+	return widget.NewLabel("Metadata: " + string(payload))
 }

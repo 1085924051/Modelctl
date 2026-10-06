@@ -237,6 +237,7 @@ type CapabilityInvokeResponse struct {
 	Output    map[string]Answer `json:"output"`
 	Raw       SystemOneResponse `json:"raw"`
 	Model     ModelRef          `json:"model"`
+	Metadata  map[string]any    `json:"metadata,omitempty"`
 	RunID     string            `json:"run_id"`
 }
 
@@ -326,6 +327,7 @@ type Run struct {
 	CapabilityVersion string            `json:"capability_version"`
 	InstanceID        string            `json:"instance_id"`
 	Input             map[string]any    `json:"input"`
+	Metadata          map[string]any    `json:"metadata,omitempty"`
 	Response          SystemOneResponse `json:"response"`
 	CreatedAt         string            `json:"created_at"`
 }
