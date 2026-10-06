@@ -5,7 +5,8 @@ function daemonBase() { return (process.env.MODELCTL_URL || "http://127.0.0.1:11
 function requestHeaders(json = false) {
   const headers = { accept: "application/json" };
   if (json) headers["content-type"] = "application/json";
-  if (process.env.MODELCTL_API_TOKEN) headers.authorization = `Bearer ${process.env.MODELCTL_API_TOKEN}`;
+  const token = process.env.MODELCTL_API_INVOKE_TOKEN || process.env.MODELCTL_API_TOKEN;
+  if (token) headers.authorization = `Bearer ${token}`;
   return headers;
 }
 

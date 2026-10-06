@@ -20,16 +20,19 @@ test("capabilities CLI forwards the enterprise bearer token", async () => {
   const address = server.address();
   const oldURL = process.env.MODELCTL_URL;
   const oldToken = process.env.MODELCTL_API_TOKEN;
+  const oldInvokeToken = process.env.MODELCTL_API_INVOKE_TOKEN;
   process.env.MODELCTL_URL = `http://127.0.0.1:${address.port}`;
   process.env.MODELCTL_API_TOKEN = "cli-secret";
+  process.env.MODELCTL_API_INVOKE_TOKEN = "invoke-secret";
   try {
     await main(["capabilities", "list"]);
   } finally {
     if (oldURL === undefined) delete process.env.MODELCTL_URL; else process.env.MODELCTL_URL = oldURL;
     if (oldToken === undefined) delete process.env.MODELCTL_API_TOKEN; else process.env.MODELCTL_API_TOKEN = oldToken;
+    if (oldInvokeToken === undefined) delete process.env.MODELCTL_API_INVOKE_TOKEN; else process.env.MODELCTL_API_INVOKE_TOKEN = oldInvokeToken;
     await new Promise((resolve) => server.close(resolve));
   }
-  assert.equal(seenAuthorization, "Bearer cli-secret");
+  assert.equal(seenAuthorization, "Bearer invoke-secret");
 });
 
 test("capabilities integration CLI fetches the copyable handoff contract", async () => {

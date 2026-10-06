@@ -118,7 +118,8 @@ export async function main(argv = process.argv.slice(2)) {
 function option(args, name) { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; }
 function apiHeaders(contentType = false) {
   const headers = contentType ? { "content-type": "application/json" } : {};
-  if (process.env.MODELCTL_API_TOKEN) headers.authorization = `Bearer ${process.env.MODELCTL_API_TOKEN}`;
+  const token = process.env.MODELCTL_API_INVOKE_TOKEN || process.env.MODELCTL_API_TOKEN;
+  if (token) headers.authorization = `Bearer ${token}`;
   return headers;
 }
 async function get(url) { const r = await fetch(url, { headers: apiHeaders() }); return parse(r); }
