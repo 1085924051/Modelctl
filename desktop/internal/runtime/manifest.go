@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -40,20 +41,20 @@ func targetTriple() string { return runtime.GOOS + "-" + runtime.GOARCH }
 
 func requiredNodeRelativePath() string {
 	if runtime.GOOS == "windows" {
-		return filepath.Join("node", "node.exe")
+		return filepath.ToSlash(filepath.Join("node", "node.exe"))
 	}
-	return filepath.Join("node", "bin", "node")
+	return filepath.ToSlash(filepath.Join("node", "bin", "node"))
 }
 
 func requiredControlPlaneRelativePath() string {
-	return filepath.Join("control-plane", "bin", "modelctl.js")
+	return filepath.ToSlash(filepath.Join("control-plane", "bin", "modelctl.js"))
 }
 
 func requiredPythonRelativePath() string {
 	if runtime.GOOS == "windows" {
-		return filepath.Join("python", "python.exe")
+		return filepath.ToSlash(filepath.Join("python", "python.exe"))
 	}
-	return filepath.Join("python", "bin", "python")
+	return filepath.ToSlash(filepath.Join("python", "bin", "python"))
 }
 
 func Resolve(appPath string) (Paths, error) {
@@ -118,14 +119,16 @@ func Verify(paths Paths) error {
 		return errors.New("runtime manifest contains no files")
 	}
 	for relative, expected := range manifest.Files {
-		if filepath.IsAbs(relative) || filepath.Clean(relative) != relative || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		normalized := filepath.ToSlash(relative)
+		clean := path.Clean(normalized)
+		if filepath.IsAbs(relative) || normalized != relative || clean != normalized || clean == "." || strings.HasPrefix(clean, "../") {
 			return fmt.Errorf("runtime manifest contains unsafe path %q", relative)
 		}
-		path := filepath.Join(paths.Root, relative)
-		if !fileExists(path) {
+		filePath := filepath.Join(paths.Root, filepath.FromSlash(normalized))
+		if !fileExists(filePath) {
 			return fmt.Errorf("runtime file is missing: %s", relative)
 		}
-		actual, err := fileSHA256(path)
+		actual, err := fileSHA256(filePath)
 		if err != nil {
 			return fmt.Errorf("hash runtime file %s: %w", relative, err)
 		}

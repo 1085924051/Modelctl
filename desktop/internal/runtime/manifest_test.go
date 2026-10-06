@@ -76,7 +76,7 @@ func writeFixtureRuntime(t *testing.T, target string) string {
 			t.Fatal(err)
 		}
 		hash := sha256.Sum256(body)
-		files[relative] = hex.EncodeToString(hash[:])
+		files[filepath.ToSlash(relative)] = hex.EncodeToString(hash[:])
 	}
 	writeManifest(t, root, target, files)
 	return root
@@ -96,7 +96,7 @@ func manifestFilesJSON(files map[string]string) string {
 		if result != "" {
 			result += ","
 		}
-		result += `"` + relative + `":"` + hash + `"`
+		result += `"` + filepath.ToSlash(relative) + `":"` + hash + `"`
 	}
 	return result
 }
