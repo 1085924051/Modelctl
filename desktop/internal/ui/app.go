@@ -174,6 +174,14 @@ func firstSupported(profiles []api.Profile) string {
 
 func (d *Desktop) renderModels() {
 	box := container.NewVBox(widget.NewLabelWithStyle("Models", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	if len(d.capabilities) == 0 {
+		box.Add(widget.NewCard("Start with a business capability", "Three steps from installation to integration", container.NewVBox(
+			widget.NewLabel("1  Download model · verify the checkpoint"),
+			widget.NewLabel("2  Load & run · choose CPU, MPS, or CUDA when available"),
+			widget.NewLabel("3  Capabilities · publish a stable contract for your application"),
+			widget.NewButton("Open Capabilities", func() { d.showPage("capabilities") }),
+		)))
+	}
 	if len(d.models) == 0 {
 		box.Add(widget.NewLabel("No models available"))
 	}
