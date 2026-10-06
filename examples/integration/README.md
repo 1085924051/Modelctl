@@ -6,7 +6,7 @@ This example uses the same files for Desktop, CLI, REST, and SDK integration.
 modelctl capabilities publish --json refund-check.capability.json
 modelctl capabilities schema refund-check
 modelctl capabilities invoke refund-check --json refund-check.invoke.json
-modelctl capabilities batch refund-check --json refund-check.batch.json
+modelctl capabilities batch refund-check --json refund-check.batch.json --wait
 ```
 
 The model variant must be downloaded first. After that, the first capability
