@@ -334,3 +334,8 @@ The response includes the stable capability id/version, typed output, raw model 
 ### `GET /v1/runs/{run_id}`
 
 Returns the locally stored input, capability version, instance id, response, and creation time for a previous capability invocation.
+
+`GET /v1/runs` returns the most recent 100 capability runs ordered newest first.
+The desktop History page uses this collection for local replay and diagnostics.
+SDK examples are in `sdk/python/modelctl_client.py` and
+`sdk/javascript/modelctl-client.mjs`.
