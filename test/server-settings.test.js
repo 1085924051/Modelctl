@@ -54,11 +54,12 @@ test("settings endpoint returns local defaults and effective proxy without crede
 });
 
 test("settings endpoint saves proxy and supported default profile", async () => {
-  const saved = await request("/v1/settings", "PUT", { proxy: { http: "http://127.0.0.1:7897", https: "http://127.0.0.1:7897" }, default_profile: "mps" });
+  const profile = process.platform === "darwin" && process.arch === "arm64" ? "mps" : "cpu";
+  const saved = await request("/v1/settings", "PUT", { proxy: { http: "http://127.0.0.1:7897", https: "http://127.0.0.1:7897" }, default_profile: profile });
   assert.equal(saved.status, 200);
   assert.equal(saved.body.settings.proxy.http, "http://127.0.0.1:7897");
   const reread = await request("/v1/settings");
-  assert.equal(reread.body.settings.default_profile, "mps");
+  assert.equal(reread.body.settings.default_profile, profile);
   assert.equal(reread.body.effective_proxy.https, "http://127.0.0.1:7897");
 });
 

@@ -16,6 +16,7 @@ const defaultURL = "http://127.0.0.1:11435"
 
 type Client struct {
 	baseURL string
+	token   string
 	http    *http.Client
 }
 
@@ -26,7 +27,7 @@ func NewClient(baseURL string) *Client {
 	if baseURL == "" {
 		baseURL = defaultURL
 	}
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{Timeout: 120 * time.Second}}
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: os.Getenv("MODELCTL_API_TOKEN"), http: &http.Client{Timeout: 120 * time.Second}}
 }
 
 func (c *Client) BaseURL() string { return c.baseURL }
@@ -173,6 +174,42 @@ type SystemOneResponse struct {
 	Routing map[string]any    `json:"routing,omitempty"`
 }
 
+type CapabilityModel struct {
+	ModelID string `json:"model_id"`
+	Version string `json:"version,omitempty"`
+	Variant string `json:"variant"`
+	Profile string `json:"profile,omitempty"`
+}
+
+type Capability struct {
+	SchemaVersion int                    `json:"schema_version"`
+	ID            string                 `json:"id"`
+	Version       string                 `json:"version"`
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description"`
+	Model         CapabilityModel        `json:"model"`
+	Input         map[string]any         `json:"input"`
+	Questions     map[string]Question    `json:"questions"`
+	CreatedAt     string                 `json:"created_at"`
+	UpdatedAt     string                 `json:"updated_at"`
+}
+
+type CapabilitiesResponse struct { Items []Capability `json:"items"` }
+
+type CapabilityInvokeRequest struct {
+	Input    map[string]any `json:"input"`
+	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+type CapabilityInvokeResponse struct {
+	RequestID string         `json:"request_id"`
+	Capability map[string]any `json:"capability"`
+	Output    map[string]Answer `json:"output"`
+	Raw       SystemOneResponse `json:"raw"`
+	Model     ModelRef          `json:"model"`
+	RunID     string            `json:"run_id"`
+}
+
 type APIError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -247,6 +284,24 @@ func (c *Client) InvokeRawSystemOne(instanceID string, request json.RawMessage) 
 	return result, err
 }
 
+func (c *Client) Capabilities() (CapabilitiesResponse, error) {
+	var result CapabilitiesResponse
+	err := c.do(http.MethodGet, "/v1/capabilities", nil, &result)
+	return result, err
+}
+
+func (c *Client) CreateCapability(capability Capability) (Capability, error) {
+	var result Capability
+	err := c.do(http.MethodPost, "/v1/capabilities", capability, &result)
+	return result, err
+}
+
+func (c *Client) InvokeCapability(id string, request CapabilityInvokeRequest) (CapabilityInvokeResponse, error) {
+	var result CapabilityInvokeResponse
+	err := c.do(http.MethodPost, "/v1/capabilities/"+url.PathEscape(id)+"/invoke", request, &result)
+	return result, err
+}
+
 func (c *Client) do(method, path string, body any, target any) error {
 	var reader io.Reader
 	if body != nil {
@@ -262,6 +317,9 @@ func (c *Client) do(method, path string, body any, target any) error {
 	}
 	if body != nil {
 		req.Header.Set("content-type", "application/json")
+	}
+	if c.token != "" {
+		req.Header.Set("authorization", "Bearer "+c.token)
 	}
 	response, err := c.http.Do(req)
 	if err != nil {

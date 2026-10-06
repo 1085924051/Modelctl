@@ -195,3 +195,20 @@ separately.
 Set `MODELCTL_URL` when the daemon is not using the default
 `http://127.0.0.1:11435`. The desktop MVP supports model variants, verified
 pulls, MPS/CPU instance lifecycle, and a structured Laya decision playground.
+
+## Application integration modes
+
+Modelctl supports two deployment modes for application teams:
+
+- Local developer mode: keep the daemon on `127.0.0.1:11435`; a desktop app or local service calls the capability API without network exposure.
+- Enterprise server mode: bind explicitly to an internal interface with `MODELCTL_HOST` and set `MODELCTL_API_TOKEN`. Remote binding is rejected unless a token is configured. Clients send `Authorization: Bearer <token>`.
+
+Example server launch:
+
+```bash
+MODELCTL_HOST=0.0.0.0 MODELCTL_API_TOKEN=replace-me node bin/modelctl.js daemon
+```
+
+The desktop console remains the administration surface. Business systems call
+`/v1/capabilities/{id}/invoke`, while model files and adapter ports stay private
+inside the Modelctl runtime.

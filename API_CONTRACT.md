@@ -296,3 +296,41 @@ software.
 ## MCP 与 Skill
 
 MCP 代理使用 `/v1/instances` 和能力目录发现可用实例，再把允许的能力映射成 MCP tools。Skill 执行器只使用这些公开 API；它不能绕过 API 直接访问 daemon 数据目录、适配器端口或模型文件。权限范围与模型能力分开配置。
+
+## Business capabilities
+
+The capability API is the stable integration layer for application developers. A capability stores a human-facing task name, a versioned input contract, the Laya/Jev questions it generates, and the pinned model variant. Callers do not need to construct the raw `state/questions` protocol.
+
+### `GET /v1/capabilities`
+
+Returns published capabilities from the local Modelctl state store.
+
+### `POST /v1/capabilities`
+
+Creates or replaces a capability by id. The minimal body is:
+
+```json
+{
+  "id": "refund-check",
+  "version": "1.0.0",
+  "name": "Refund check",
+  "description": "Decide whether the customer asks for a refund.",
+  "model": {"model_id": "convaiinnovations/laya", "variant": "english", "profile": "auto"},
+  "input": {"type": "text", "field": "text"},
+  "questions": {"refund": {"type": "noul", "instructions": "Does the customer ask for a refund?"}}
+}
+```
+
+### `POST /v1/capabilities/{id}/invoke`
+
+Requires a ready instance for the capability's pinned model and variant.
+
+```json
+{"input": {"text": "The customer was charged twice and wants a refund."}, "metadata": {"ticket_id": "T-100"}}
+```
+
+The response includes the stable capability id/version, typed output, raw model response, model metadata, and a replayable `run_id`. If the matching instance is not ready, the daemon returns `503 CAPABILITY_NOT_READY` with the model and variant that must be started by the desktop console or CLI.
+
+### `GET /v1/runs/{run_id}`
+
+Returns the locally stored input, capability version, instance id, response, and creation time for a previous capability invocation.

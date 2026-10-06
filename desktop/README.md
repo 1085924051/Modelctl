@@ -84,3 +84,22 @@ full model response.
 The selected model variant, device, decision draft, and answers remain in the
 window when switching between Models, Running, and Playground. Refresh reloads
 model and instance status from the daemon.
+
+## Business capability integration
+
+The desktop client now exposes a Capabilities page above the raw Laya playground.
+Create a capability such as `refund-check`, bind it to an installed model variant,
+and publish a human-readable question. The daemon stores the capability contract
+and exposes it to application developers:
+
+```http
+POST http://127.0.0.1:11435/v1/capabilities/refund-check/invoke
+Content-Type: application/json
+
+{"input":{"text":"The customer was charged twice and wants a refund."}}
+```
+
+The response contains a stable capability version, typed answers, model metadata,
+and a replayable run id. Business applications should call this endpoint or use a
+small SDK generated from the capability contract. They should not read the model
+store or construct Laya `state/questions` payloads themselves.

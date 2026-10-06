@@ -12,7 +12,8 @@ const webFiles = new Map([
 
 export async function createServer({ port = Number(process.env.MODELCTL_PORT || 11435), host = process.env.MODELCTL_HOST || "127.0.0.1" } = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("MODELCTL_PORT must be an integer between 0 and 65535");
-  if (!new Set(["127.0.0.1", "::1", "localhost"]).has(host)) throw new Error("modelctl can only bind to loopback addresses");
+  const loopback = new Set(["127.0.0.1", "::1", "localhost"]).has(host);
+  if (!loopback && !process.env.MODELCTL_API_TOKEN) throw new Error("remote binding requires MODELCTL_API_TOKEN");
   await ensureDirs();
   await updateState((state) => {
     for (const instance of Object.values(state.instances)) {
@@ -28,6 +29,7 @@ export async function createServer({ port = Number(process.env.MODELCTL_PORT || 
       const address = server.address();
       const serverHost = host.includes(":") ? `[${host}]` : host;
       const baseUrl = process.env.MODELCTL_URL || `http://${serverHost}:${typeof address === "object" ? address.port : process.env.MODELCTL_PORT || 11435}`;
+      authenticate(req, new URL(req.url, "http://localhost").pathname);
       await route(req, res, rid, baseUrl);
     } catch (error) { errorResponse(res, error, rid); }
   });
@@ -43,6 +45,14 @@ async function route(req, res, rid, baseUrl) {
   if (req.method === "GET" && pathname === "/v1/settings") return getSettings(res, baseUrl);
   if (req.method === "PUT" && pathname === "/v1/settings") return putSettings(req, res, baseUrl);
   if (req.method === "GET" && pathname === "/v1/community") return jsonResponse(res, 200, await loadCommunityRegistry());
+  if (req.method === "GET" && pathname === "/v1/capabilities") return listCapabilities(res);
+  if (req.method === "POST" && pathname === "/v1/capabilities") return createCapability(req, res);
+  const capabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)$/);
+  if (req.method === "GET" && capabilityMatch) return getCapability(capabilityMatch[1], res);
+  const invokeCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/invoke$/);
+  if (req.method === "POST" && invokeCapabilityMatch) return invokeCapability(invokeCapabilityMatch[1], req, res);
+  const runMatch = pathname.match(/^\/v1\/runs\/([^/]+)$/);
+  if (req.method === "GET" && runMatch) return getRun(runMatch[1], res);
   if (req.method === "GET" && pathname === "/v1/mcp/config") return getMcpConfig(res, baseUrl);
   if (req.method === "PUT" && pathname === "/v1/mcp/config") return putMcpConfig(req, res, baseUrl);
   if (req.method === "GET" && pathname === "/v1/models") {
@@ -282,14 +292,75 @@ async function stopInstance(id, res) {
 
 async function invokeDefault(req, res) { const s = await readState(); const ready = Object.values(s.instances).filter((x) => x.status === "ready" && x.capabilities?.includes("system_one")); const selected = ready.find((x) => x.default); if (!selected && ready.length > 1) throw apiError(409, "INSTANCE_AMBIGUOUS", "multiple ready instances; select a default or use the instance endpoint"); const i = selected || ready[0]; if (!i) throw apiError(503, "SERVICE_UNAVAILABLE", "no ready default instance"); return invokeInstance(i.id, "system_one", req, res); }
 
-async function invokeInstance(id, operation, req, res) { const s = await readState(); const i = s.instances[id]; if (!i) throw apiError(404, "INSTANCE_NOT_FOUND", "instance not found"); if (i.status !== "ready") throw apiError(503, "SERVICE_UNAVAILABLE", "instance is not ready", undefined, true); const body = await readJson(req); const targetPath = operation === "system_one" ? "/v1/systemone" : `/v1/operation/${encodeURIComponent(operation)}`; const target = `http://${i.host}:${i.port}${targetPath}`; let response; try { response = await fetch(target, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) }); } catch (error) { throw apiError(502, "ADAPTER_UNREACHABLE", `adapter request failed: ${error.name === "TimeoutError" ? "timeout" : "connection error"}`, undefined, true); } const text = await response.text(); res.writeHead(response.status, { "content-type": response.headers.get("content-type") || "application/json" }); res.end(text); }
+async function invokeInstance(id, operation, req, res) {
+  const body = await readJson(req);
+  const result = await invokeInstanceBody(id, operation, body);
+  return jsonResponse(res, 200, result);
+}
+
+function authenticate(req, pathname) {
+  const token = process.env.MODELCTL_API_TOKEN;
+  if (!token || pathname === "/health") return;
+  const provided = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  if (provided !== token) throw apiError(401, "UNAUTHORIZED", "a valid Modelctl API token is required");
+}
+
+async function invokeInstanceBody(id, operation, body) {
+  const s = await readState(); const i = s.instances[id];
+  if (!i) throw apiError(404, "INSTANCE_NOT_FOUND", "instance not found");
+  if (i.status !== "ready") throw apiError(503, "SERVICE_UNAVAILABLE", "instance is not ready", undefined, true);
+  const targetPath = operation === "system_one" ? "/v1/systemone" : `/v1/operation/${encodeURIComponent(operation)}`;
+  const target = `http://${i.host}:${i.port}${targetPath}`; let response;
+  try { response = await fetch(target, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) }); }
+  catch (error) { throw apiError(502, "ADAPTER_UNREACHABLE", `adapter request failed: ${error.name === "TimeoutError" ? "timeout" : "connection error"}`, undefined, true); }
+  const text = await response.text(); let parsed;
+  try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
+  if (!response.ok) throw apiError(response.status, parsed?.error?.code || "ADAPTER_ERROR", parsed?.error?.message || `adapter returned HTTP ${response.status}`);
+  return parsed;
+}
+
+function capabilityId(value) { return typeof value === "string" && /^[a-z0-9][a-z0-9._-]{1,63}$/.test(value); }
+
+function validateCapability(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw apiError(400, "INVALID_REQUEST", "capability must be an object");
+  if (!capabilityId(body.id)) throw apiError(422, "CAPABILITY_INVALID", "id must use lowercase letters, digits, dot, underscore, or dash");
+  if (typeof body.name !== "string" || !body.name.trim()) throw apiError(422, "CAPABILITY_INVALID", "name is required");
+  if (typeof body.description !== "string") throw apiError(422, "CAPABILITY_INVALID", "description must be a string");
+  if (!body.model || typeof body.model !== "object" || typeof body.model.model_id !== "string" || typeof body.model.variant !== "string") throw apiError(422, "CAPABILITY_INVALID", "model_id and variant are required");
+  if (!body.questions || typeof body.questions !== "object" || Array.isArray(body.questions) || !Object.keys(body.questions).length) throw apiError(422, "CAPABILITY_INVALID", "questions must be a non-empty object");
+  for (const [id, question] of Object.entries(body.questions)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(id) || !question || typeof question !== "object") throw apiError(422, "CAPABILITY_INVALID", `invalid question ${id}`);
+    if (!["noul", "choice", "score"].includes(question.type) || typeof question.instructions !== "string" || !question.instructions.trim()) throw apiError(422, "CAPABILITY_INVALID", `question ${id} needs type and instructions`);
+    if (["choice", "score"].includes(question.type) && (!question.criteria || (Array.isArray(question.criteria) && !question.criteria.length))) throw apiError(422, "CAPABILITY_INVALID", `question ${id} needs criteria`);
+  }
+  const version = typeof body.version === "string" && body.version.trim() ? body.version.trim() : "1.0.0";
+  return { schema_version: 1, id: body.id, version, name: body.name.trim(), description: body.description.trim(), model: { model_id: body.model.model_id, version: body.model.version || undefined, variant: body.model.variant, profile: body.model.profile || "auto" }, input: body.input && typeof body.input === "object" ? body.input : { type: "text", field: "text" }, questions: body.questions, created_at: body.created_at || new Date().toISOString(), updated_at: new Date().toISOString() };
+}
+
+async function listCapabilities(res) { const state = await readState(); return jsonResponse(res, 200, { items: Object.values(state.capabilities || {}).sort((a, b) => a.id.localeCompare(b.id)) }); }
+async function getCapability(id, res) { const state = await readState(); const item = state.capabilities[id]; if (!item) throw apiError(404, "CAPABILITY_NOT_FOUND", "capability not found"); return jsonResponse(res, 200, item); }
+async function createCapability(req, res) { const capability = validateCapability(await readJson(req)); await updateState((state) => { state.capabilities[capability.id] = capability; }); return jsonResponse(res, 201, capability); }
+
+async function invokeCapability(id, req, res) {
+  const state = await readState(); const capability = state.capabilities[id]; if (!capability) throw apiError(404, "CAPABILITY_NOT_FOUND", "capability not found");
+  const body = objectBody(await readJson(req)); const input = objectBody(body.input || body); const field = capability.input?.field || "text"; const text = input[field];
+  if (typeof text !== "string" || !text.trim()) throw apiError(422, "INPUT_INVALID", `${field} must be a non-empty string`);
+  const ready = Object.values(state.instances).filter((instance) => instance.status === "ready" && instance.capabilities?.includes("system_one") && instance.model?.id === capability.model.model_id && instance.model?.variant === capability.model.variant);
+  const selected = ready.find((instance) => instance.default) || ready[0]; if (!selected) throw apiError(503, "CAPABILITY_NOT_READY", "start the capability model instance before invoking it", { model_id: capability.model.model_id, variant: capability.model.variant }, true);
+  const response = await invokeInstanceBody(selected.id, "system_one", { state: { body: text.trim() }, questions: capability.questions });
+  const run = { id: newId("run"), capability_id: capability.id, capability_version: capability.version, instance_id: selected.id, input: { [field]: text.trim() }, response, created_at: new Date().toISOString() };
+  await updateState((next) => { next.runs[run.id] = run; });
+  return jsonResponse(res, 200, { request_id: run.id, capability: { id: capability.id, version: capability.version }, output: response.answers || response, raw: response, model: selected.model, run_id: run.id });
+}
+
+async function getRun(id, res) { const state = await readState(); const run = state.runs[id]; if (!run) throw apiError(404, "RUN_NOT_FOUND", "run not found"); return jsonResponse(res, 200, run); }
 
 async function freePort() { const net = await import("node:net"); return new Promise((resolve, reject) => { const s = net.createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => resolve(p)); }); s.on("error", reject); }); }
 
 function objectBody(body) { if (!body || typeof body !== "object" || Array.isArray(body)) throw apiError(400, "INVALID_REQUEST", "request body must be a JSON object"); return body; }
 
 function hostPlatform() {
-  const osName = process.platform === "darwin" ? "macos" : process.platform === "linux" ? "linux" : process.platform;
+  const osName = process.platform === "darwin" ? "macos" : process.platform === "linux" ? "linux" : process.platform === "win32" ? "windows" : process.platform;
   const arch = process.arch === "x64" ? "x86_64" : process.arch;
   return `${osName}-${arch}`;
 }

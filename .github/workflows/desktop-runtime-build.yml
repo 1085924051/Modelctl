@@ -8,13 +8,35 @@ on:
         required: true
         default: "0.1.0"
   push:
-    branches: [codex/go-desktop-mvp]
+    branches: [main, feature/capability-workbench]
     tags: ["desktop-v*"]
 
 permissions:
   contents: read
 
 jobs:
+  quality:
+    name: Node and desktop quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+      - name: Validate Node sources and tests
+        run: |
+          node --check src/core.js
+          node --check src/server.js
+          npm test
+      - name: Test desktop client
+        working-directory: desktop
+        run: go test ./...
+
   runtime:
     strategy:
       fail-fast: false
