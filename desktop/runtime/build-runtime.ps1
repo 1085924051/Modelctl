@@ -12,3 +12,4 @@ $PythonRoot = if ($env:MODELCTL_PYTHON_ROOT) { $env:MODELCTL_PYTHON_ROOT } else 
   --target $Target --output $Output --source $RootDir `
   --node-binary $NodeBinary --node-root $NodeRoot --python-binary $PythonBinary --python-root $PythonRoot
 & node (Join-Path $RootDir "desktop\runtime\tests\verify-runtime.mjs") $Output
+& powershell -ExecutionPolicy Bypass -File (Join-Path $RootDir "desktop\runtime\assert-layout.ps1") $Output $Target
