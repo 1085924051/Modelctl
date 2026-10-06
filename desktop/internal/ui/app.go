@@ -213,14 +213,16 @@ func (d *Desktop) modelCard(index int) fyne.CanvasObject {
 	progress := widget.NewLabel("")
 	var pull *widget.Button
 	var run *widget.Button
-	pull = widget.NewButton("Download model", func() { d.pull(model, progress, stateLabel, pull, run) })
+	cancel := widget.NewButton("Cancel", nil)
+	cancel.Hide()
+	pull = widget.NewButton("Download model", func() { d.pull(model, progress, stateLabel, pull, run, cancel) })
 	run = widget.NewButton("Load & run", func() { d.run(model, progress, stateLabel, pull, run) })
 	content := container.NewVBox(
 		widget.NewLabel(fmt.Sprintf("%s · v%s", model.summary.ID, model.summary.Version)),
 		stateLabel,
 		runningLabel,
 		container.NewGridWithColumns(2, widget.NewLabel("Variant"), variantSelect, widget.NewLabel("Device"), profileSelect),
-		container.NewHBox(pull, run, progress),
+		container.NewHBox(pull, run, cancel, progress),
 	)
 	name := model.detail.DisplayName
 	if name == "" {
@@ -236,17 +238,32 @@ func modelStateText(model api.ModelSummary, variant string) string {
 	return "Not downloaded · Download verifies the checkpoint"
 }
 
-func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label, pull, run *widget.Button) {
+func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label, pull, run, cancel *widget.Button) {
 	request := api.PullRequest{ModelID: model.summary.ID, Version: model.summary.Version, Variant: model.variant}
 	pull.Disable()
 	run.Disable()
+	cancel.Show()
+	cancel.Enable()
+	var taskID string
+	cancel.OnTapped = func() {
+		if taskID == "" { return }
+		cancel.Disable()
+		go func() {
+			_, err := d.client.CancelTask(taskID)
+			fyne.Do(func() {
+				if err != nil { progress.SetText(err.Error()); cancel.Enable(); return }
+				progress.SetText("Cancelling download...")
+			})
+		}()
+	}
 	go func() {
-		defer fyne.Do(func() { pull.Enable(); run.Enable() })
+		defer fyne.Do(func() { pull.Enable(); run.Enable(); cancel.Hide(); cancel.Enable() })
 		result, err := d.client.Pull(request)
 		if err != nil {
 			fyne.Do(func() { progress.SetText(err.Error()) })
 			return
 		}
+		taskID = result.TaskID
 		for {
 			task, taskErr := d.client.Task(result.TaskID)
 			if taskErr != nil {

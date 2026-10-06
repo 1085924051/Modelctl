@@ -288,6 +288,12 @@ func (c *Client) Task(taskID string) (Task, error) {
 	return result, err
 }
 
+func (c *Client) CancelTask(taskID string) (Task, error) {
+	var result Task
+	err := c.do(http.MethodPost, "/v1/tasks/"+url.PathEscape(taskID)+"/cancel", map[string]any{}, &result)
+	return result, err
+}
+
 func (c *Client) StartInstance(request StartInstanceRequest) (Instance, error) {
 	var result Instance
 	err := c.do(http.MethodPost, "/v1/instances", request, &result)
