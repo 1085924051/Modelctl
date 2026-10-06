@@ -33,6 +33,37 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === "doctor") return doctor();
   if (command === "setup") return setup();
   await ensureDaemon(base);
+  if (command === "capabilities") {
+    if (subcommand === "list") return print(await get(`${base}/v1/capabilities`));
+    if (subcommand === "schema") {
+      const id = rest[0]; if (!id) throw new Error("capabilities schema requires <capability-id>");
+      const version = option(rest, "version");
+      return print(await get(`${base}/v1/capabilities/${encodeURIComponent(id)}/schema${version ? `?version=${encodeURIComponent(version)}` : ""}`));
+    }
+    if (subcommand === "invoke") {
+      const id = rest[0]; const file = option(rest, "json");
+      if (!id || !file) throw new Error("capabilities invoke requires <capability-id> --json <file>");
+      const version = option(rest, "version");
+      return print(await post(`${base}/v1/capabilities/${encodeURIComponent(id)}/invoke${version ? `?version=${encodeURIComponent(version)}` : ""}`, await readJsonFile(file)));
+    }
+    if (subcommand === "batch") {
+      const id = rest[0]; const file = option(rest, "json");
+      if (!id || !file) throw new Error("capabilities batch requires <capability-id> --json <file>");
+      const version = option(rest, "version");
+      return print(await post(`${base}/v1/capabilities/${encodeURIComponent(id)}/batch${version ? `?version=${encodeURIComponent(version)}` : ""}`, await readJsonFile(file)));
+    }
+    if (subcommand === "publish") {
+      const file = option(rest, "json");
+      if (!file) throw new Error("capabilities publish requires --json <capability-file>");
+      return print(await post(`${base}/v1/capabilities`, await readJsonFile(file)));
+    }
+    if (subcommand === "activate") {
+      const id = rest[0]; const version = option(rest, "version");
+      if (!id || !version) throw new Error("capabilities activate requires <capability-id> --version <version>");
+      return print(await post(`${base}/v1/capabilities/${encodeURIComponent(id)}/activate`, { version }));
+    }
+    throw new Error("capabilities requires list, schema, invoke, batch, publish, or activate");
+  }
   if (command === "catalog" && subcommand === "list") return print(await get(`${base}/v1/models`));
   if (command === "inspect") {
     const model = subcommand && !subcommand.startsWith("--") ? subcommand : rest[0];
@@ -69,9 +100,15 @@ export async function main(argv = process.argv.slice(2)) {
 }
 
 function option(args, name) { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; }
-async function get(url) { const r = await fetch(url); return parse(r); }
-async function post(url, body) { const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); return parse(r); }
-async function del(url) { const r = await fetch(url, { method: "DELETE" }); return parse(r); }
+function apiHeaders(contentType = false) {
+  const headers = contentType ? { "content-type": "application/json" } : {};
+  if (process.env.MODELCTL_API_TOKEN) headers.authorization = `Bearer ${process.env.MODELCTL_API_TOKEN}`;
+  return headers;
+}
+async function get(url) { const r = await fetch(url, { headers: apiHeaders() }); return parse(r); }
+async function post(url, body) { const r = await fetch(url, { method: "POST", headers: apiHeaders(true), body: JSON.stringify(body) }); return parse(r); }
+async function del(url) { const r = await fetch(url, { method: "DELETE", headers: apiHeaders() }); return parse(r); }
+async function readJsonFile(file) { return JSON.parse(await (await import("node:fs/promises")).readFile(file, "utf8")); }
 async function parse(r) { const text = await r.text(); let body; try { body = JSON.parse(text); } catch { body = text; } if (!r.ok) throw new Error(body?.error?.message || `${r.status} request failed`); return body; }
 function print(value) { console.log(JSON.stringify(value, null, 2)); }
 async function ensureDaemon(base) {
@@ -154,4 +191,4 @@ async function doctor() {
   print(report);
   if (!report.node.supported || !report.python?.supported || !report.platform_supported || !report.catalog_valid) process.exitCode = 1;
 }
-function usage() { console.log(`modelctl\n\n  setup                  install the private Laya runtime\n  doctor                 check local runtime prerequisites\n  catalog validate|list  validate or list model catalog\n  inspect                list models and install state\n  pull <model> [--variant v] [--detach]\n  run <model> [--variant v] [--profile p]\n  ps | tasks | cancel <task-id> | logs <id> | stop <id>\n  remove <model> [--variant v] [--purge]\n  invoke <instance> <operation> --json file\n  daemon                 start local API in the foreground\n  data                   show data directory\n\n  modelctl-mcp           start MCP stdio proxy`); }
+function usage() { console.log(`modelctl\n\n  setup                  install the private Laya runtime\n  doctor                 check local runtime prerequisites\n  catalog validate|list  validate or list model catalog\n  inspect                list models and install state\n  pull <model> [--variant v] [--detach]\n  run <model> [--variant v] [--profile p]\n  ps | tasks | cancel <task-id> | logs <id> | stop <id>\n  remove <model> [--variant v] [--purge]\n  invoke <instance> <operation> --json file\n  capabilities list|schema|invoke|batch|publish|activate\n  capabilities invoke <id> --json file [--version v]\n  capabilities batch <id> --json file [--version v]\n  daemon                 start local API in the foreground\n  data                   show data directory\n\n  modelctl-mcp           start MCP stdio proxy`); }
