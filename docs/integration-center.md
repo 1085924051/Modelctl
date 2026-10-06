@@ -20,6 +20,16 @@ contract = client.integration("refund-check", "1.0.0")
 print(contract["endpoint"])
 ```
 
+For API gateway registration or CI contract checks, fetch the generated OpenAPI
+document:
+
+```bash
+modelctl capabilities openapi refund-check --version 1.0.0 > refund-check.openapi.json
+```
+
+It describes the versioned synchronous and batch endpoints and adds the bearer
+security scheme when the daemon is running in enterprise mode.
+
 For local use, a loopback daemon can be called without a token. For an
 enterprise daemon bound to a non-loopback address, set `MODELCTL_API_TOKEN` and
 keep it in the business service's secret manager. The Desktop app never copies

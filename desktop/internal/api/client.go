@@ -408,6 +408,16 @@ func (c *Client) CapabilityIntegration(id string, version ...string) (Capability
 	return result, err
 }
 
+func (c *Client) CapabilityOpenAPI(id string, version ...string) (map[string]any, error) {
+	var result map[string]any
+	path := "/v1/capabilities/" + url.PathEscape(id) + "/openapi"
+	if len(version) > 0 && version[0] != "" {
+		path += "?version=" + url.QueryEscape(version[0])
+	}
+	err := c.do(http.MethodGet, path, nil, &result)
+	return result, err
+}
+
 func (c *Client) Runs() (RunsResponse, error) {
 	var result RunsResponse
 	err := c.do(http.MethodGet, "/v1/runs", nil, &result)

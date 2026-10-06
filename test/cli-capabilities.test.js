@@ -55,6 +55,29 @@ test("capabilities integration CLI fetches the copyable handoff contract", async
   assert.equal(seenPath, "/v1/capabilities/refund-check/integration?version=1.0.0");
 });
 
+test("capabilities OpenAPI CLI fetches a versioned document", async () => {
+  let seenPath = "";
+  const server = http.createServer((req, res) => {
+    seenPath = req.url;
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/health") return res.end(JSON.stringify({ status: "ok" }));
+    if (req.url === "/v1/capabilities/refund-check/openapi?version=1.0.0") return res.end(JSON.stringify({ openapi: "3.1.0" }));
+    res.statusCode = 404;
+    return res.end(JSON.stringify({ error: { message: "not found" } }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const oldURL = process.env.MODELCTL_URL;
+  try {
+    process.env.MODELCTL_URL = `http://127.0.0.1:${address.port}`;
+    await main(["capabilities", "openapi", "refund-check", "--version", "1.0.0"]);
+  } finally {
+    if (oldURL === undefined) delete process.env.MODELCTL_URL; else process.env.MODELCTL_URL = oldURL;
+    await new Promise((resolve) => server.close(resolve));
+  }
+  assert.equal(seenPath, "/v1/capabilities/refund-check/openapi?version=1.0.0");
+});
+
 test("capabilities batch --wait polls until the task is terminal", async () => {
   let polls = 0;
   let seenBatch = null;

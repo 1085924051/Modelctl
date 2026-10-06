@@ -56,6 +56,11 @@ codes, and copyable curl, Python, and JavaScript examples. The same package is
 available from `modelctl capabilities integration <id> --version 1.0.0` and the
 `client.integration(...)` method in both SDKs.
 
+For gateway registration and CI contract checks, use
+`GET /v1/capabilities/{id}/openapi?version=1.0.0` or
+`modelctl capabilities openapi <id> --version 1.0.0` to export an OpenAPI 3.1
+document for the invoke and batch endpoints.
+
 The repository includes a complete copyable example in
 [`examples/integration`](../examples/integration): publish the capability,
 inspect its request/response schema, invoke one ticket, and submit a batch of

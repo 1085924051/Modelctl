@@ -73,16 +73,42 @@ func (d *Desktop) renderIntegration() {
 
 func populateIntegrationDetail(d *Desktop, detail *fyne.Container, integration api.CapabilityIntegration) {
 	capabilityName, _ := integration.Capability["name"].(string)
+	capabilityID, _ := integration.Capability["id"].(string)
+	capabilityVersion, _ := integration.Capability["version"].(string)
 	authRequired, _ := integration.Auth["required"].(bool)
 	authText := "No token required in local loopback mode"
 	if authRequired {
 		authText = "Bearer token required · use MODELCTL_API_TOKEN in the business service secret store"
 	}
+	openAPIStatus := widget.NewLabel("")
+	var openAPIButton *widget.Button
+	openAPIButton = widget.NewButton("Copy OpenAPI JSON", func() {
+		openAPIButton.Disable()
+		openAPIStatus.SetText("Loading...")
+		go func() {
+			document, err := d.client.CapabilityOpenAPI(capabilityID, capabilityVersion)
+			fyne.Do(func() {
+				openAPIButton.Enable()
+				if err != nil {
+					openAPIStatus.SetText(err.Error())
+					return
+				}
+				payload, marshalErr := json.MarshalIndent(document, "", "  ")
+				if marshalErr != nil {
+					openAPIStatus.SetText(marshalErr.Error())
+					return
+				}
+				d.app.Clipboard().SetContent(string(payload))
+				openAPIStatus.SetText("OpenAPI JSON copied")
+			})
+		}()
+	})
 	detail.Add(widget.NewCard(capabilityName, "Business service connection", container.NewVBox(
 		widget.NewLabel("Endpoint"),
 		copyableText(d, integration.Endpoint),
 		widget.NewLabel(authText),
 		widget.NewLabel("The endpoint is versioned. Modelctl starts the matching local runtime automatically after the model is installed."),
+		container.NewHBox(openAPIButton, openAPIStatus),
 	)))
 
 	requestSchema, _ := json.MarshalIndent(integration.RequestSchema, "", "  ")

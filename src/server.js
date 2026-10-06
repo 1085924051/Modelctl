@@ -54,6 +54,8 @@ async function route(req, res, rid, baseUrl) {
   if (req.method === "GET" && capabilitySchemaMatch) return getCapabilitySchema(capabilitySchemaMatch[1], url.searchParams.get("version"), res);
   const capabilityIntegrationMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/integration$/);
   if (req.method === "GET" && capabilityIntegrationMatch) return getCapabilityIntegration(capabilityIntegrationMatch[1], url.searchParams.get("version"), baseUrl, res);
+  const capabilityOpenAPIMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/openapi$/);
+  if (req.method === "GET" && capabilityOpenAPIMatch) return getCapabilityOpenAPI(capabilityOpenAPIMatch[1], url.searchParams.get("version"), baseUrl, res);
   const invokeCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/invoke$/);
   if (req.method === "POST" && invokeCapabilityMatch) return invokeCapability(invokeCapabilityMatch[1], url.searchParams.get("version"), req, res);
   const batchCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/batch$/);
@@ -428,6 +430,36 @@ async function getCapabilityIntegration(id, version, baseUrl, res) {
     examples,
     errors: ["CAPABILITY_NOT_FOUND", "MODEL_NOT_INSTALLED", "INPUT_INVALID", "UNAUTHORIZED"],
   });
+}
+
+async function getCapabilityOpenAPI(id, version, baseUrl, res) {
+  const state = await readState();
+  const capability = resolveCapability(state, id, version);
+  const schema = await capabilitySchema(capability);
+  const requestSchemaName = `${capability.id.replaceAll(/[^A-Za-z0-9]/g, "_")}_invoke_request`;
+  const responseSchemaName = `${capability.id.replaceAll(/[^A-Za-z0-9]/g, "_")}_invoke_response`;
+  const authRequired = Boolean(process.env.MODELCTL_API_TOKEN);
+  const security = authRequired ? [{ bearerAuth: [] }] : undefined;
+  const versionParameter = { name: "version", in: "query", required: true, description: "Capability version. The generated contract is pinned to this version.", schema: { type: "string", enum: [capability.version] } };
+  const operationSecurity = security ? { security } : {};
+  const document = {
+    openapi: "3.1.0",
+    info: { title: `${capability.name} · Modelctl capability`, version: capability.version, description: capability.description },
+    servers: [{ url: baseUrl }],
+    paths: {
+      [`/v1/capabilities/${encodeURIComponent(capability.id)}/invoke`]: {
+        post: { operationId: `${capability.id.replaceAll(/[^A-Za-z0-9]/g, "_")}_invoke`, summary: capability.name, parameters: [versionParameter], ...operationSecurity, requestBody: { required: true, content: { "application/json": { schema: { $ref: `#/components/schemas/${requestSchemaName}` } } } }, responses: { "200": { description: "Capability result", content: { "application/json": { schema: { $ref: `#/components/schemas/${responseSchemaName}` } } } }, "400": { description: "Invalid request" }, "401": { description: "Unauthorized" }, "409": { description: "Model is not installed" }, "422": { description: "Input contract validation failed" } } },
+      },
+      [`/v1/capabilities/${encodeURIComponent(capability.id)}/batch`]: {
+        post: { operationId: `${capability.id.replaceAll(/[^A-Za-z0-9]/g, "_")}_batch`, summary: `${capability.name} batch`, parameters: [versionParameter], ...operationSecurity, requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["items"], properties: { items: { type: "array", minItems: 1, maxItems: 1000, items: { $ref: `#/components/schemas/${requestSchemaName}` } } } } } } }, responses: { "202": { description: "Batch task accepted" }, "422": { description: "Invalid batch" } } },
+      },
+    },
+    components: {
+      schemas: { [requestSchemaName]: schema.request_schema, [responseSchemaName]: schema.response_schema },
+      ...(authRequired ? { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "token" } } } : {}),
+    },
+  };
+  return jsonResponse(res, 200, document);
 }
 
 async function capabilitySchema(capability) {

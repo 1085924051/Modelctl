@@ -85,6 +85,17 @@ test("capability integration endpoint returns a versioned handoff contract", asy
   assert.deepEqual(integration.body.request_schema.properties.input.required, ["text"]);
 });
 
+test("capability OpenAPI endpoint describes invoke and batch routes", async () => {
+  await request("/v1/capabilities", "POST", capability);
+  const response = await request("/v1/capabilities/refund-check/openapi?version=1.0.0");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.openapi, "3.1.0");
+  assert.equal(response.body.info.version, "1.0.0");
+  assert.ok(response.body.paths["/v1/capabilities/refund-check/invoke"].post);
+  assert.ok(response.body.paths["/v1/capabilities/refund-check/batch"].post);
+  assert.equal(response.body.components.schemas.refund_check_invoke_request.properties.input.required[0], "text");
+});
+
 test("capability schema exposes choice and score output contracts", async () => {
   await request("/v1/capabilities", "POST", {
     ...capability,

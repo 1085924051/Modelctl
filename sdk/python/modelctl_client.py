@@ -37,6 +37,11 @@ class Modelctl:
         suffix = f"?version={quote(version, safe='')}" if version else ""
         return self._request("GET", f"/v1/capabilities/{quote(capability_id, safe='')}/integration{suffix}")
 
+    def openapi(self, capability_id: str, version: str | None = None) -> dict:
+        """Return an OpenAPI 3.1 document for a pinned capability."""
+        suffix = f"?version={quote(version, safe='')}" if version else ""
+        return self._request("GET", f"/v1/capabilities/{quote(capability_id, safe='')}/openapi{suffix}")
+
     def runs(self) -> list[dict]:
         return self._request("GET", "/v1/runs").get("items", [])
 

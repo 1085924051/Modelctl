@@ -24,6 +24,9 @@ console.log(result.output);
 
 const contract = await client.integration("refund-check", "1.0.0");
 console.log(contract.endpoint, contract.request_schema);
+
+const openapi = await client.openapi("refund-check", "1.0.0");
+console.log(openapi.openapi, openapi.paths);
 ```
 
 For enterprise server mode, pass the API token to the constructor or set

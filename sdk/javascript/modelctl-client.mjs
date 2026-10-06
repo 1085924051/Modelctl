@@ -28,6 +28,11 @@ export class Modelctl {
     return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/integration${suffix}`);
   }
 
+  async openapi(capabilityId, version) {
+    const suffix = version ? `?version=${encodeURIComponent(version)}` : "";
+    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/openapi${suffix}`);
+  }
+
   async runs() {
     return (await this.request("/v1/runs")).items || [];
   }
