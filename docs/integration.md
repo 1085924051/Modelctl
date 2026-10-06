@@ -91,6 +91,11 @@ Put the service behind the enterprise TLS gateway. Business applications send
 the token in an `Authorization: Bearer` header. Keep adapter ports and the model
 store private to the Modelctl host.
 
+Use `MODELCTL_API_INVOKE_TOKEN` for application traffic when possible. It is a
+least-privilege token limited to capability discovery, readiness checks,
+invocation, and batch task polling. Keep `MODELCTL_API_TOKEN` for administrators
+who publish or activate capabilities and manage models.
+
 The desktop Settings page can apply a remote URL and token for administration.
 Business services should inject their token from the company's secret manager:
 

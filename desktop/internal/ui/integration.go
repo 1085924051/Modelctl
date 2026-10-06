@@ -108,7 +108,11 @@ func populateIntegrationDetail(d *Desktop, detail *fyne.Container, integration a
 	authRequired, _ := integration.Auth["required"].(bool)
 	authText := "No token required in local loopback mode"
 	if authRequired {
-		authText = "Bearer token required · use MODELCTL_API_TOKEN in the business service secret store"
+		tokenEnvironmentVariable, _ := integration.Auth["environment_variable"].(string)
+		if tokenEnvironmentVariable == "" {
+			tokenEnvironmentVariable = "MODELCTL_API_TOKEN"
+		}
+		authText = "Bearer token required · use " + tokenEnvironmentVariable + " in the business service secret store"
 	}
 	readinessStatus := widget.NewLabel("Readiness not checked")
 	var readinessButton *widget.Button

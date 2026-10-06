@@ -32,10 +32,11 @@ after(async () => {
   else process.env.MODELCTL_DATA_DIR = oldDataDir;
 });
 
-function request(route, method = "GET", body) {
+function request(route, method = "GET", body, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
-    const req = http.request(new URL(route, base), { method, headers: payload ? { "content-type": "application/json", "content-length": payload.length } : {} }, (res) => {
+    const headers = { ...extraHeaders, ...(payload ? { "content-type": "application/json", "content-length": payload.length } : {}) };
+    const req = http.request(new URL(route, base), { method, headers }, (res) => {
       const chunks = [];
       res.on("data", (chunk) => chunks.push(chunk));
       res.on("end", () => resolve({ status: res.statusCode, body: JSON.parse(Buffer.concat(chunks).toString("utf8")) }));
@@ -104,6 +105,39 @@ test("capability status explains deployment readiness before invocation", async 
   assert.equal(response.body.status, "model_not_installed");
   assert.equal(response.body.next_action, "download_model");
   assert.equal(response.body.model.variant, "english");
+});
+
+test("invoke-only token can call capabilities but cannot manage them", async () => {
+  await request("/v1/capabilities", "POST", capability);
+  const previous = process.env.MODELCTL_API_INVOKE_TOKEN;
+  process.env.MODELCTL_API_INVOKE_TOKEN = "invoke-secret";
+  try {
+    const status = await request("/v1/capabilities/refund-check/status", "GET", undefined, { authorization: "Bearer invoke-secret" });
+    assert.equal(status.status, 200);
+    const publish = await request("/v1/capabilities", "POST", { ...capability, id: "other-capability" }, { authorization: "Bearer invoke-secret" });
+    assert.equal(publish.status, 403);
+    assert.equal(publish.body.error.code, "FORBIDDEN");
+  } finally {
+    if (previous === undefined) delete process.env.MODELCTL_API_INVOKE_TOKEN;
+    else process.env.MODELCTL_API_INVOKE_TOKEN = previous;
+  }
+});
+
+test("integration examples use the least-privilege token when configured", async () => {
+  await request("/v1/capabilities", "POST", capability);
+  const previous = process.env.MODELCTL_API_INVOKE_TOKEN;
+  process.env.MODELCTL_API_INVOKE_TOKEN = "invoke-secret";
+  try {
+    const integration = await request("/v1/capabilities/refund-check/integration", "GET", undefined, { authorization: "Bearer invoke-secret" });
+    assert.equal(integration.status, 200);
+    assert.equal(integration.body.auth.environment_variable, "MODELCTL_API_INVOKE_TOKEN");
+    assert.match(integration.body.examples.curl, /MODELCTL_API_INVOKE_TOKEN/);
+    assert.match(integration.body.examples.python, /MODELCTL_API_INVOKE_TOKEN/);
+    assert.match(integration.body.examples.javascript, /MODELCTL_API_INVOKE_TOKEN/);
+  } finally {
+    if (previous === undefined) delete process.env.MODELCTL_API_INVOKE_TOKEN;
+    else process.env.MODELCTL_API_INVOKE_TOKEN = previous;
+  }
 });
 
 test("capability schema exposes choice and score output contracts", async () => {

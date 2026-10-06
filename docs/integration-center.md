@@ -45,6 +45,11 @@ enterprise daemon bound to a non-loopback address, set `MODELCTL_API_TOKEN` and
 keep it in the business service's secret manager. The Desktop app never copies
 the token into examples.
 
+For production business services, configure `MODELCTL_API_INVOKE_TOKEN` instead
+of sharing the administrator token. This token can inspect published contracts,
+check readiness, invoke capabilities, and poll batch tasks, but cannot publish
+or activate capabilities, manage models, or stop runtimes.
+
 Production services should pin a capability version and persist `run_id`,
 `capability_version`, and their own `metadata` (for example a ticket or order
 ID). When a new contract is ready, publish it as a new semantic version, test

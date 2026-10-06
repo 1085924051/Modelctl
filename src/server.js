@@ -14,7 +14,7 @@ const capabilityStarts = new Map();
 export async function createServer({ port = Number(process.env.MODELCTL_PORT || 11435), host = process.env.MODELCTL_HOST || "127.0.0.1" } = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("MODELCTL_PORT must be an integer between 0 and 65535");
   const loopback = new Set(["127.0.0.1", "::1", "localhost"]).has(host);
-  if (!loopback && !process.env.MODELCTL_API_TOKEN) throw new Error("remote binding requires MODELCTL_API_TOKEN");
+  if (!loopback && !process.env.MODELCTL_API_TOKEN && !process.env.MODELCTL_API_INVOKE_TOKEN) throw new Error("remote binding requires MODELCTL_API_TOKEN or MODELCTL_API_INVOKE_TOKEN");
   await ensureDirs();
   await updateState((state) => {
     for (const instance of Object.values(state.instances)) {
@@ -318,10 +318,22 @@ async function invokeInstance(id, operation, req, res) {
 }
 
 function authenticate(req, pathname) {
-  const token = process.env.MODELCTL_API_TOKEN;
-  if (!token || pathname === "/health") return;
+  const adminToken = process.env.MODELCTL_API_TOKEN;
+  const invokeToken = process.env.MODELCTL_API_INVOKE_TOKEN;
+  if ((!adminToken && !invokeToken) || pathname === "/health") return;
   const provided = req.headers.authorization?.replace(/^Bearer\s+/i, "");
-  if (provided !== token) throw apiError(401, "UNAUTHORIZED", "a valid Modelctl API token is required");
+  if (provided && adminToken && provided === adminToken) return;
+  if (provided && invokeToken && provided === invokeToken) {
+    if (isInvokeOnlyRoute(req.method, pathname)) return;
+    throw apiError(403, "FORBIDDEN", "the invoke token cannot manage models or capabilities");
+  }
+  throw apiError(401, "UNAUTHORIZED", "a valid Modelctl API token is required");
+}
+
+function isInvokeOnlyRoute(method, pathname) {
+  if (method === "GET" && (pathname === "/v1/capabilities" || /^\/v1\/capabilities\/[^/]+(?:\/schema|\/integration|\/openapi|\/status)?$/.test(pathname) || /^\/v1\/tasks\/[^/]+$/.test(pathname))) return true;
+  if (method === "POST" && /^\/v1\/capabilities\/[^/]+\/(invoke|batch)$/.test(pathname)) return true;
+  return false;
 }
 
 async function invokeInstanceBody(id, operation, body) {
@@ -414,19 +426,20 @@ async function getCapabilityIntegration(id, version, baseUrl, res) {
   const endpoint = `${baseUrl}/v1/capabilities/${encodeURIComponent(capability.id)}/invoke?version=${encodeURIComponent(capability.version)}`;
   const input = sampleCapabilityInput(capability.input);
   const payload = JSON.stringify({ input, metadata: { ticket_id: "T-100" } }, null, 2);
-  const authRequired = Boolean(process.env.MODELCTL_API_TOKEN);
-  const authHeader = authRequired ? "Authorization: Bearer $MODELCTL_API_TOKEN\n" : "";
-  const curlAuth = authRequired ? "  -H 'Authorization: Bearer $MODELCTL_API_TOKEN' \\\n" : "";
+  const authRequired = Boolean(process.env.MODELCTL_API_TOKEN || process.env.MODELCTL_API_INVOKE_TOKEN);
+  const tokenEnvironmentVariable = process.env.MODELCTL_API_INVOKE_TOKEN ? "MODELCTL_API_INVOKE_TOKEN" : "MODELCTL_API_TOKEN";
+  const authHeader = authRequired ? `Authorization: Bearer $${tokenEnvironmentVariable}\n` : "";
+  const curlAuth = authRequired ? `  -H 'Authorization: Bearer $${tokenEnvironmentVariable}' \\\n` : "";
   const examples = {
     curl: `curl ${endpoint} \\\n${curlAuth}  -H 'Content-Type: application/json' \\\n  -d '${payload.replaceAll("'", "'\\\"'\\\"'")}'`,
-    python: `${authRequired ? "import os\n" : ""}from modelctl_client import Modelctl\n\nclient = Modelctl(${JSON.stringify(baseUrl)}${authRequired ? ", token=os.environ.get(\"MODELCTL_API_TOKEN\")" : ""})\nresult = client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, {"ticket_id": "T-100"}, ${JSON.stringify(capability.version)})\nprint(result["output"])`,
-    javascript: `import { Modelctl } from "modelctl-client";\n\nconst client = new Modelctl(${JSON.stringify(baseUrl)}${authRequired ? ", { token: process.env.MODELCTL_API_TOKEN }" : ""});\nconst result = await client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, { ticket_id: "T-100" }, ${JSON.stringify(capability.version)});\nconsole.log(result.output);`,
+    python: `${authRequired ? "import os\n" : ""}from modelctl_client import Modelctl\n\nclient = Modelctl(${JSON.stringify(baseUrl)}${authRequired ? `, token=os.environ.get("${tokenEnvironmentVariable}")` : ""})\nresult = client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, {"ticket_id": "T-100"}, ${JSON.stringify(capability.version)})\nprint(result["output"])`,
+    javascript: `import { Modelctl } from "modelctl-client";\n\nconst client = new Modelctl(${JSON.stringify(baseUrl)}${authRequired ? `, { token: process.env.${tokenEnvironmentVariable} }` : ""});\nconst result = await client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, { ticket_id: "T-100" }, ${JSON.stringify(capability.version)});\nconsole.log(result.output);`,
   };
   return jsonResponse(res, 200, {
     capability: { id: capability.id, version: capability.version, name: capability.name, description: capability.description },
     base_url: baseUrl,
     endpoint,
-    auth: { required: authRequired, scheme: authRequired ? "bearer" : "none", header: authHeader.trim() || null, environment_variable: authRequired ? "MODELCTL_API_TOKEN" : null },
+    auth: { required: authRequired, scheme: authRequired ? "bearer" : "none", header: authHeader.trim() || null, environment_variable: authRequired ? tokenEnvironmentVariable : null, invoke_only: Boolean(process.env.MODELCTL_API_INVOKE_TOKEN) },
     request_schema: schema.request_schema,
     response_schema: schema.response_schema,
     examples,
