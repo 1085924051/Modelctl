@@ -350,10 +350,33 @@ func (d *Desktop) renderCapabilities() {
 					}
 				}()
 			})
+			readinessStatus := widget.NewLabel("Readiness not checked")
+			var readinessButton *widget.Button
+			readinessButton = widget.NewButton("Check deployment readiness", func() {
+				readinessButton.Disable()
+				readinessStatus.SetText("Checking…")
+				go func() {
+					result, err := d.client.CapabilityStatus(capability.ID, capability.Version)
+					fyne.Do(func() {
+						readinessButton.Enable()
+						if err != nil {
+							readinessStatus.SetText(err.Error())
+							return
+						}
+						state, _ := result["status"].(string)
+						next, _ := result["next_action"].(string)
+						if state == "model_not_installed" {
+							readinessStatus.SetText(fmt.Sprintf("Model %s is not installed. Open Models to download %s.", capability.Model.ModelID, capability.Model.Variant))
+							return
+						}
+						readinessStatus.SetText("Status: " + state + " · next: " + next)
+					})
+				}()
+			})
 			box.Add(widget.NewCard(capability.Name, capability.ID+" v"+capability.Version, container.NewVBox(
 				widget.NewLabel(capability.Description),
 				widget.NewLabel(fmt.Sprintf("Model: %s · %s · %s", capability.Model.ModelID, capability.Model.Variant, capability.Model.Profile)),
-				widget.NewButton("Open Integration", func() { d.showPage("integration") }),
+				container.NewHBox(widget.NewButton("Open Integration", func() { d.showPage("integration") }), readinessButton, readinessStatus),
 				copyDefinition,
 				versionStatus,
 				versionButtons,
