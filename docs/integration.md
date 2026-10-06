@@ -95,6 +95,12 @@ Publishing a new output shape should create a new capability version. This lets
 an application upgrade deliberately and keeps model upgrades from silently
 breaking production integrations.
 
+Published versions are immutable. A second publish to the same `id` and
+`version` returns `CAPABILITY_VERSION_EXISTS`; increment the version before
+changing questions, model binding, or output expectations. Batch tasks record
+and use the active capability version captured at task creation, even if an
+administrator activates another version while the batch is running.
+
 ## Integration choices
 
 - REST: browser, Python, Java, Go, and internal services.

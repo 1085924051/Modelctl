@@ -85,6 +85,15 @@ test("capability versions can be published and activated explicitly", async () =
   assert.equal(selected.body.version, "1.0.0");
 });
 
+test("a published capability version cannot be overwritten", async () => {
+  assert.equal((await request("/v1/capabilities", "POST", capability)).status, 201);
+  const replacement = await request("/v1/capabilities", "POST", { ...capability, questions: { changed: { type: "noul", instructions: "A different contract?" } } });
+  assert.equal(replacement.status, 409);
+  assert.equal(replacement.body.error.code, "CAPABILITY_VERSION_EXISTS");
+  const current = await request("/v1/capabilities/refund-check");
+  assert.ok(current.body.questions.refund);
+});
+
 test("capability validation hides the raw protocol from invalid clients", async () => {
   const invalid = await request("/v1/capabilities", "POST", { id: "Bad ID", name: "x" });
   assert.equal(invalid.status, 422);
@@ -115,6 +124,7 @@ test("capability batches return a task that records per-item errors", async () =
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   assert.equal(task.body.status, "succeeded");
+  assert.equal(task.body.capability_version, "1.0.0");
   assert.equal(task.body.progress.items_done, 2);
   assert.equal(task.body.errors.length, 2);
 });

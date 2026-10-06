@@ -374,7 +374,12 @@ async function getCapabilitySchema(id, version, res) {
 }
 async function createCapability(req, res) {
   const body = objectBody(await readJson(req)); const activate = body.activate !== false; const capability = validateCapability(body);
-  await updateState((state) => { state.capability_versions[capability.id] ||= {}; state.capability_versions[capability.id][capability.version] = capability; if (activate || !state.capabilities[capability.id]) state.capabilities[capability.id] = capability; });
+  await updateState((state) => {
+    state.capability_versions[capability.id] ||= {};
+    if (state.capability_versions[capability.id][capability.version]) throw apiError(409, "CAPABILITY_VERSION_EXISTS", `capability ${capability.id}@${capability.version} already exists; publish a new version`);
+    state.capability_versions[capability.id][capability.version] = capability;
+    if (activate || !state.capabilities[capability.id]) state.capabilities[capability.id] = capability;
+  });
   const state = await readState(); return jsonResponse(res, 201, { ...capability, active: state.capabilities[capability.id]?.version === capability.version, available_versions: Object.keys(state.capability_versions[capability.id]).sort() });
 }
 
@@ -427,10 +432,10 @@ async function ensureCapabilityInstance(capability) {
 async function createCapabilityBatch(id, version, req, res) {
   const body = objectBody(await readJson(req));
   if (!Array.isArray(body.items) || body.items.length === 0 || body.items.length > 1000) throw apiError(422, "BATCH_INVALID", "items must contain between 1 and 1000 inputs");
-  const state = await readState(); resolveCapability(state, id, version);
+  const state = await readState(); const capability = resolveCapability(state, id, version);
   const taskId = newId("task");
-  await updateState((next) => { next.tasks[taskId] = { id: taskId, kind: "capability_batch", status: "queued", capability_id: id, progress: { items_done: 0, items_total: body.items.length }, results: [], errors: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; });
-  void processCapabilityBatch(taskId, id, version, body.items).catch(() => undefined);
+  await updateState((next) => { next.tasks[taskId] = { id: taskId, kind: "capability_batch", status: "queued", capability_id: id, capability_version: capability.version, progress: { items_done: 0, items_total: body.items.length }, results: [], errors: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; });
+  void processCapabilityBatch(taskId, id, capability.version, body.items).catch(() => undefined);
   return jsonResponse(res, 202, { task_id: taskId, status: "queued", poll: `/v1/tasks/${taskId}` });
 }
 
