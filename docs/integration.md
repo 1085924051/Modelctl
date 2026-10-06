@@ -61,6 +61,10 @@ For gateway registration and CI contract checks, use
 `modelctl capabilities openapi <id> --version 1.0.0` to export an OpenAPI 3.1
 document for the invoke and batch endpoints.
 
+Use `GET /v1/capabilities/{id}/status?version=1.0.0` as a deployment or CI
+readiness check. It reports whether the bound model is installed and whether a
+matching runtime is ready, with a machine-readable `next_action`.
+
 The repository includes a complete copyable example in
 [`examples/integration`](../examples/integration): publish the capability,
 inspect its request/response schema, invoke one ticket, and submit a batch of

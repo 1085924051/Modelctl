@@ -30,6 +30,16 @@ modelctl capabilities openapi refund-check --version 1.0.0 > refund-check.openap
 It describes the versioned synchronous and batch endpoints and adds the bearer
 security scheme when the daemon is running in enterprise mode.
 
+Before switching a business service to production, check deployment readiness:
+
+```bash
+modelctl capabilities status refund-check --version 1.0.0
+```
+
+The result distinguishes a missing model (`download_model`), an installed model
+whose runtime has not started yet, and a ready capability. This check does not
+run a business request or mutate runtime state.
+
 For local use, a loopback daemon can be called without a token. For an
 enterprise daemon bound to a non-loopback address, set `MODELCTL_API_TOKEN` and
 keep it in the business service's secret manager. The Desktop app never copies

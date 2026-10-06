@@ -96,6 +96,16 @@ test("capability OpenAPI endpoint describes invoke and batch routes", async () =
   assert.equal(response.body.components.schemas.refund_check_invoke_request.properties.input.required[0], "text");
 });
 
+test("capability status explains deployment readiness before invocation", async () => {
+  await request("/v1/capabilities", "POST", capability);
+  const response = await request("/v1/capabilities/refund-check/status?version=1.0.0");
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ready, false);
+  assert.equal(response.body.status, "model_not_installed");
+  assert.equal(response.body.next_action, "download_model");
+  assert.equal(response.body.model.variant, "english");
+});
+
 test("capability schema exposes choice and score output contracts", async () => {
   await request("/v1/capabilities", "POST", {
     ...capability,

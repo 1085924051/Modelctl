@@ -42,6 +42,11 @@ class Modelctl:
         suffix = f"?version={quote(version, safe='')}" if version else ""
         return self._request("GET", f"/v1/capabilities/{quote(capability_id, safe='')}/openapi{suffix}")
 
+    def status(self, capability_id: str, version: str | None = None) -> dict:
+        """Check model installation and runtime readiness without invoking."""
+        suffix = f"?version={quote(version, safe='')}" if version else ""
+        return self._request("GET", f"/v1/capabilities/{quote(capability_id, safe='')}/status{suffix}")
+
     def runs(self) -> list[dict]:
         return self._request("GET", "/v1/runs").get("items", [])
 

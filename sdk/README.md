@@ -13,6 +13,10 @@ print(result["output"])
 # Inspect the same contract that the Desktop Integration page displays.
 contract = client.integration("refund-check", "1.0.0")
 print(contract["endpoint"], contract["request_schema"])
+
+openapi = client.openapi("refund-check", "1.0.0")
+readiness = client.status("refund-check", "1.0.0")
+print(openapi["openapi"], readiness["ready"], readiness["next_action"])
 ```
 
 ```js
@@ -27,6 +31,9 @@ console.log(contract.endpoint, contract.request_schema);
 
 const openapi = await client.openapi("refund-check", "1.0.0");
 console.log(openapi.openapi, openapi.paths);
+
+const readiness = await client.status("refund-check", "1.0.0");
+console.log(readiness.ready, readiness.next_action);
 ```
 
 For enterprise server mode, pass the API token to the constructor or set

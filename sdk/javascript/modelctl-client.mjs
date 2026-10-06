@@ -33,6 +33,11 @@ export class Modelctl {
     return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/openapi${suffix}`);
   }
 
+  async status(capabilityId, version) {
+    const suffix = version ? `?version=${encodeURIComponent(version)}` : "";
+    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/status${suffix}`);
+  }
+
   async runs() {
     return (await this.request("/v1/runs")).items || [];
   }

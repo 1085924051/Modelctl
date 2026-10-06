@@ -56,6 +56,8 @@ async function route(req, res, rid, baseUrl) {
   if (req.method === "GET" && capabilityIntegrationMatch) return getCapabilityIntegration(capabilityIntegrationMatch[1], url.searchParams.get("version"), baseUrl, res);
   const capabilityOpenAPIMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/openapi$/);
   if (req.method === "GET" && capabilityOpenAPIMatch) return getCapabilityOpenAPI(capabilityOpenAPIMatch[1], url.searchParams.get("version"), baseUrl, res);
+  const capabilityStatusMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/status$/);
+  if (req.method === "GET" && capabilityStatusMatch) return getCapabilityStatus(capabilityStatusMatch[1], url.searchParams.get("version"), res);
   const invokeCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/invoke$/);
   if (req.method === "POST" && invokeCapabilityMatch) return invokeCapability(invokeCapabilityMatch[1], url.searchParams.get("version"), req, res);
   const batchCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/batch$/);
@@ -460,6 +462,25 @@ async function getCapabilityOpenAPI(id, version, baseUrl, res) {
     },
   };
   return jsonResponse(res, 200, document);
+}
+
+async function getCapabilityStatus(id, version, res) {
+  const state = await readState();
+  const capability = resolveCapability(state, id, version);
+  const installed = Object.values(state.models || {}).find((item) => item.id === capability.model.model_id && item.variant === capability.model.variant && (!capability.model.version || item.version === capability.model.version));
+  const ready = matchingCapabilityInstances(state, capability);
+  const selected = ready.find((instance) => instance.default) || ready[0];
+  const status = selected ? "ready" : installed ? "not_started" : "model_not_installed";
+  const nextAction = status === "ready" ? "ready" : status === "model_not_installed" ? "download_model" : "invoke_capability_or_start_runtime";
+  return jsonResponse(res, 200, {
+    capability: { id: capability.id, version: capability.version, active: state.capabilities?.[capability.id]?.version === capability.version },
+    model: { model_id: capability.model.model_id, version: capability.model.version || installed?.version || null, variant: capability.model.variant, installed: Boolean(installed) },
+    runtime: { ready: Boolean(selected), instance_id: selected?.id || null, status: selected?.status || null },
+    ready: status === "ready",
+    status,
+    next_action: nextAction,
+    checked_at: new Date().toISOString(),
+  });
 }
 
 async function capabilitySchema(capability) {

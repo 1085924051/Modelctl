@@ -110,6 +110,25 @@ func populateIntegrationDetail(d *Desktop, detail *fyne.Container, integration a
 	if authRequired {
 		authText = "Bearer token required · use MODELCTL_API_TOKEN in the business service secret store"
 	}
+	readinessStatus := widget.NewLabel("Readiness not checked")
+	var readinessButton *widget.Button
+	readinessButton = widget.NewButton("Check readiness", func() {
+		readinessButton.Disable()
+		readinessStatus.SetText("Checking...")
+		go func() {
+			result, err := d.client.CapabilityStatus(capabilityID, capabilityVersion)
+			fyne.Do(func() {
+				readinessButton.Enable()
+				if err != nil {
+					readinessStatus.SetText(err.Error())
+					return
+				}
+				state, _ := result["status"].(string)
+				next, _ := result["next_action"].(string)
+				readinessStatus.SetText("Status: " + state + " · next: " + next)
+			})
+		}()
+	})
 	openAPIStatus := widget.NewLabel("")
 	var openAPIButton *widget.Button
 	openAPIButton = widget.NewButton("Copy OpenAPI JSON", func() {
@@ -138,6 +157,7 @@ func populateIntegrationDetail(d *Desktop, detail *fyne.Container, integration a
 		copyableText(d, integration.Endpoint),
 		widget.NewLabel(authText),
 		widget.NewLabel("The endpoint is versioned. Modelctl starts the matching local runtime automatically after the model is installed."),
+		container.NewHBox(readinessButton, readinessStatus),
 		container.NewHBox(openAPIButton, openAPIStatus),
 	)))
 
