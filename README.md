@@ -32,6 +32,9 @@ modelctl capabilities invoke refund-check --json request.json
 modelctl capabilities batch refund-check --json batch.json
 ```
 
+客户业务系统接入请先阅读
+[`docs/customer-integration.md`](docs/customer-integration.md)。它按本地开发、随桌面产品交付、企业内网和批处理四种场景说明部署边界、调用流程、版本策略和 REST/SDK 接口。
+
 Set `MODELCTL_URL` and `MODELCTL_API_TOKEN` for an internal enterprise daemon;
 the CLI forwards the bearer token on every control-plane request.
 
