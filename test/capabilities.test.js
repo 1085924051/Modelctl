@@ -420,3 +420,21 @@ test("remote binding requires an explicit API token", async () => {
   if (previous === undefined) delete process.env.MODELCTL_API_TOKEN;
   else process.env.MODELCTL_API_TOKEN = previous;
 });
+
+test("remote binding accepts an invoke-only token for service deployments", async () => {
+  const previousAdmin = process.env.MODELCTL_API_TOKEN;
+  const previousInvoke = process.env.MODELCTL_API_INVOKE_TOKEN;
+  delete process.env.MODELCTL_API_TOKEN;
+  process.env.MODELCTL_API_INVOKE_TOKEN = "invoke-secret";
+  let remote;
+  try {
+    remote = await createServer({ host: "0.0.0.0", port: 0 });
+    assert.ok(remote.address().port > 0);
+  } finally {
+    if (remote) await new Promise((resolve) => remote.close(resolve));
+    if (previousAdmin === undefined) delete process.env.MODELCTL_API_TOKEN;
+    else process.env.MODELCTL_API_TOKEN = previousAdmin;
+    if (previousInvoke === undefined) delete process.env.MODELCTL_API_INVOKE_TOKEN;
+    else process.env.MODELCTL_API_INVOKE_TOKEN = previousInvoke;
+  }
+});
