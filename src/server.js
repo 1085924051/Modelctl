@@ -433,7 +433,7 @@ async function getCapabilityIntegration(id, version, baseUrl, res) {
   const examples = {
     curl: `curl ${endpoint} \\\n${curlAuth}  -H 'Content-Type: application/json' \\\n  -d '${payload.replaceAll("'", "'\\\"'\\\"'")}'`,
     python: `${authRequired ? "import os\n" : ""}from modelctl_client import Modelctl\n\nclient = Modelctl(${JSON.stringify(baseUrl)}${authRequired ? `, token=os.environ.get("${tokenEnvironmentVariable}")` : ""})\nresult = client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, {"ticket_id": "T-100"}, ${JSON.stringify(capability.version)})\nprint(result["output"])`,
-    javascript: `import { Modelctl } from "modelctl-client";\n\nconst client = new Modelctl(${JSON.stringify(baseUrl)}${authRequired ? `, { token: process.env.${tokenEnvironmentVariable} }` : ""});\nconst result = await client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, { ticket_id: "T-100" }, ${JSON.stringify(capability.version)});\nconsole.log(result.output);`,
+    javascript: `import { Modelctl } from "modelctl-client";\n\nconst client = new Modelctl(${JSON.stringify(baseUrl)}${authRequired ? `, process.env.${tokenEnvironmentVariable}` : ""});\nconst result = await client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, { ticket_id: "T-100" }, ${JSON.stringify(capability.version)});\nconsole.log(result.output);`,
   };
   return jsonResponse(res, 200, {
     capability: { id: capability.id, version: capability.version, name: capability.name, description: capability.description },
@@ -453,7 +453,7 @@ async function getCapabilityOpenAPI(id, version, baseUrl, res) {
   const schema = await capabilitySchema(capability);
   const requestSchemaName = `${capability.id.replaceAll(/[^A-Za-z0-9]/g, "_")}_invoke_request`;
   const responseSchemaName = `${capability.id.replaceAll(/[^A-Za-z0-9]/g, "_")}_invoke_response`;
-  const authRequired = Boolean(process.env.MODELCTL_API_TOKEN);
+  const authRequired = Boolean(process.env.MODELCTL_API_TOKEN || process.env.MODELCTL_API_INVOKE_TOKEN);
   const security = authRequired ? [{ bearerAuth: [] }] : undefined;
   const versionParameter = { name: "version", in: "query", required: true, description: "Capability version. The generated contract is pinned to this version.", schema: { type: "string", enum: [capability.version] } };
   const operationSecurity = security ? { security } : {};

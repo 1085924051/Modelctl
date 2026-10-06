@@ -97,6 +97,21 @@ test("capability OpenAPI endpoint describes invoke and batch routes", async () =
   assert.equal(response.body.components.schemas.refund_check_invoke_request.properties.input.required[0], "text");
 });
 
+test("capability OpenAPI requires a bearer token for invoke-only deployments", async () => {
+  await request("/v1/capabilities", "POST", { ...capability, id: "secured-refund" });
+  const previous = process.env.MODELCTL_API_INVOKE_TOKEN;
+  process.env.MODELCTL_API_INVOKE_TOKEN = "invoke-secret";
+  try {
+    const response = await request("/v1/capabilities/secured-refund/openapi?version=1.0.0", "GET", undefined, { authorization: "Bearer invoke-secret" });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.paths["/v1/capabilities/secured-refund/invoke"].post.security, [{ bearerAuth: [] }]);
+    assert.ok(response.body.components.securitySchemes.bearerAuth);
+  } finally {
+    if (previous === undefined) delete process.env.MODELCTL_API_INVOKE_TOKEN;
+    else process.env.MODELCTL_API_INVOKE_TOKEN = previous;
+  }
+});
+
 test("capability status explains deployment readiness before invocation", async () => {
   await request("/v1/capabilities", "POST", capability);
   const response = await request("/v1/capabilities/refund-check/status?version=1.0.0");
@@ -131,9 +146,10 @@ test("integration examples use the least-privilege token when configured", async
     const integration = await request("/v1/capabilities/refund-check/integration", "GET", undefined, { authorization: "Bearer invoke-secret" });
     assert.equal(integration.status, 200);
     assert.equal(integration.body.auth.environment_variable, "MODELCTL_API_INVOKE_TOKEN");
-    assert.match(integration.body.examples.curl, /MODELCTL_API_INVOKE_TOKEN/);
-    assert.match(integration.body.examples.python, /MODELCTL_API_INVOKE_TOKEN/);
-    assert.match(integration.body.examples.javascript, /MODELCTL_API_INVOKE_TOKEN/);
+  assert.match(integration.body.examples.curl, /MODELCTL_API_INVOKE_TOKEN/);
+  assert.match(integration.body.examples.python, /MODELCTL_API_INVOKE_TOKEN/);
+  assert.match(integration.body.examples.javascript, /MODELCTL_API_INVOKE_TOKEN/);
+  assert.doesNotMatch(integration.body.examples.javascript, /\{ token:/);
   } finally {
     if (previous === undefined) delete process.env.MODELCTL_API_INVOKE_TOKEN;
     else process.env.MODELCTL_API_INVOKE_TOKEN = previous;
