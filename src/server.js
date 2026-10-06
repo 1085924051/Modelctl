@@ -411,7 +411,7 @@ async function getCapabilitySchema(id, version, res) {
   const state = await readState(); const capability = resolveCapability(state, id, version);
   const field = capability.input?.field || "text";
   const outputProperties = Object.fromEntries(Object.entries(capability.questions || {}).map(([questionID, question]) => [questionID, answerSchema(question)]));
-  const inputSchema = capability.input?.fields ? structuredInputSchema(capability.input) : { type: "object", required: [field], properties: { [field]: { type: "string" } } };
+  const inputSchema = capability.input?.fields ? structuredInputSchema(capability.input) : { type: "object", required: [field], properties: { [field]: { type: "string", description: "Business text sent to the capability." } } };
   return jsonResponse(res, 200, {
     capability: { id: capability.id, version: capability.version, name: capability.name },
     request_schema: { type: "object", required: ["input"], properties: { input: inputSchema, metadata: { type: "object" } } },
@@ -515,17 +515,19 @@ function sampleCapabilityInput(inputContract) {
 
 function answerSchema(question) {
   const common = { type: { type: "string", enum: [question.type] }, value: {}, confidence: { type: "number" }, probabilities: { type: "object" } };
+  const description = question.instructions?.trim() || undefined;
+  const criteria = question.criteria === undefined ? undefined : { "x-modelctl-criteria": question.criteria };
   if (question.type === "choice") {
     const labels = Array.isArray(question.criteria) ? question.criteria : Object.keys(question.criteria || {});
     const value = { type: "string", ...(labels.length ? { enum: labels } : {}) };
-    return { type: "object", required: ["type", "value", "choice"], properties: { ...common, value, choice: value } };
+    return { type: "object", ...(description ? { description } : {}), ...(criteria || {}), required: ["type", "value", "choice"], properties: { ...common, value, choice: value } };
   }
   if (question.type === "score") {
     const value = { type: ["number", "string", "object", "array", "null"] };
-    return { type: "object", required: ["type", "value", "score"], properties: { ...common, value, score: value } };
+    return { type: "object", ...(description ? { description } : {}), ...(criteria || {}), required: ["type", "value", "score"], properties: { ...common, value, score: value } };
   }
   const value = { type: "number", minimum: 0, maximum: 1 };
-  return { type: "object", required: ["type", "value", "noul"], properties: { ...common, value, noul: value } };
+  return { type: "object", ...(description ? { description } : {}), ...(criteria || {}), required: ["type", "value", "noul"], properties: { ...common, value, noul: value } };
 }
 async function createCapability(req, res) {
   const body = objectBody(await readJson(req)); const activate = body.activate !== false; const capability = validateCapability(body);

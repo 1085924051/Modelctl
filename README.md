@@ -236,3 +236,7 @@ starts its matching runtime automatically. The application only needs the
 capability URL and its input contract; it does not need to start an instance or
 manage an adapter port. A request for an undownloaded variant returns
 `MODEL_NOT_INSTALLED` so deployment automation can prepare the exact model.
+
+## 业务系统接入
+
+业务系统接入请阅读 [`docs/business-integration.md`](docs/business-integration.md)。文档按个人开发者、桌面产品、企业内网和批处理场景说明部署边界、版本化 capability 调用、最小权限 Token、REST/SDK 示例与 readiness 检查。

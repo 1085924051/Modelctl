@@ -150,8 +150,12 @@ test("capability schema exposes choice and score output contracts", async () => 
     },
   });
   const schema = await request("/v1/capabilities/ticket-routing/schema");
+  assert.equal(schema.body.request_schema.properties.input.properties.text.description, "Business text sent to the capability.");
   assert.deepEqual(schema.body.response_schema.properties.output.properties.team.properties.choice.enum, ["billing", "support"]);
+  assert.equal(schema.body.response_schema.properties.output.properties.team.description, "Which team?");
+  assert.deepEqual(schema.body.response_schema.properties.output.properties.team["x-modelctl-criteria"], { billing: "Billing", support: "Support" });
   assert.deepEqual(schema.body.response_schema.properties.output.properties.priority.required, ["type", "value", "score"]);
+  assert.deepEqual(schema.body.response_schema.properties.output.properties.priority["x-modelctl-criteria"], ["low", "medium", "high"]);
 });
 
 test("run history is available as a replayable collection", async () => {
