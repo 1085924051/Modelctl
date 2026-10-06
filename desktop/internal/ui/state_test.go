@@ -232,6 +232,25 @@ func TestCapabilityTestInputsFollowStructuredContracts(t *testing.T) {
 	}
 }
 
+func TestCapabilityDefinitionJSONIsPortableForPublish(t *testing.T) {
+	definition := capabilityDefinitionJSON(api.Capability{
+		ID: "refund-check", Version: "1.2.0", Name: "Refund check", Description: "Check refund intent",
+		Model:     api.CapabilityModel{ModelID: "convaiinnovations/laya", Variant: "english"},
+		Input:     map[string]any{"type": "text", "field": "text"},
+		Questions: map[string]api.Question{"refund": {Type: "noul", Instructions: "Refund?"}},
+	})
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(definition), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["id"] != "refund-check" || payload["version"] != "1.2.0" || payload["activate"] != false {
+		t.Fatalf("portable definition = %#v", payload)
+	}
+	if _, ok := payload["active"]; ok {
+		t.Fatal("runtime state leaked into portable definition")
+	}
+}
+
 func TestBuildCapabilityInputParsesHumanFriendlyFields(t *testing.T) {
 	input, err := buildCapabilityInput("text:string:Customer message\norder_id?:string:Order number", "Message: {{text}}\\nOrder: {{order_id}}")
 	if err != nil {

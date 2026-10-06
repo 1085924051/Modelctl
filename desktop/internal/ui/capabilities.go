@@ -166,11 +166,13 @@ func (d *Desktop) renderCapabilities() {
 		for _, capability := range d.capabilities {
 			capability := capability
 			snippet := capabilitySnippet(d.client.BaseURL(), capability.ID, capability.Version, capability.Input, d.client.HasToken())
+			definitionJSON := capabilityDefinitionJSON(capability)
 			integration := widget.NewMultiLineEntry()
 			integration.SetText(snippet)
 			integration.SetMinRowsVisible(11)
 			integration.Disable()
 			copySnippet := widget.NewButton("Copy integration example", func() { d.app.Clipboard().SetContent(snippet) })
+			copyDefinition := widget.NewButton("Copy capability JSON", func() { d.app.Clipboard().SetContent(definitionJSON) })
 			schemaOutput := widget.NewMultiLineEntry()
 			schemaOutput.SetText("Click View schema to load the request and response contract.")
 			schemaOutput.SetMinRowsVisible(10)
@@ -305,6 +307,7 @@ func (d *Desktop) renderCapabilities() {
 				widget.NewLabel(capability.Description),
 				widget.NewLabel(fmt.Sprintf("Model: %s · %s · %s", capability.Model.ModelID, capability.Model.Variant, capability.Model.Profile)),
 				widget.NewButton("Open Integration", func() { d.showPage("integration") }),
+				copyDefinition,
 				versionStatus,
 				versionButtons,
 				container.NewHBox(viewSchema, schemaStatus),
@@ -427,19 +430,19 @@ func buildCapabilityInput(definitionText, template string) (map[string]any, erro
 }
 
 func sampleCapabilityInputJSON(inputContract map[string]any) string {
-	payload, _ := json.MarshalIndent(sampleCapabilityInput(inputContract, "The customer was charged twice and wants a refund."), "", "  ")
+	payload, _ := json.MarshalIndent(structuredCapabilitySampleInput(inputContract, "The customer was charged twice and wants a refund."), "", "  ")
 	return string(payload)
 }
 
 func sampleBatchCapabilityInput(inputContract map[string]any) string {
-	first := sampleCapabilityInput(inputContract, "The customer was charged twice and wants a refund.")
-	second := sampleCapabilityInput(inputContract, "The user cannot log in to the dashboard.")
+	first := structuredCapabilitySampleInput(inputContract, "The customer was charged twice and wants a refund.")
+	second := structuredCapabilitySampleInput(inputContract, "The user cannot log in to the dashboard.")
 	firstJSON, _ := json.Marshal(first)
 	secondJSON, _ := json.Marshal(second)
 	return string(firstJSON) + "\n" + string(secondJSON)
 }
 
-func sampleCapabilityInput(inputContract map[string]any, defaultText string) map[string]any {
+func structuredCapabilitySampleInput(inputContract map[string]any, defaultText string) map[string]any {
 	if fields, ok := inputContract["fields"].(map[string]any); ok {
 		result := make(map[string]any, len(fields))
 		for id, raw := range fields {
@@ -516,6 +519,22 @@ func capabilitySnippet(baseURL, id, version string, inputContract map[string]any
 	}
 	inputJSON, _ := json.Marshal(sampleCapabilityInput(inputContract))
 	return fmt.Sprintf("REST\nPOST %s\n%s\n\n%s\n\nPython SDK\nclient.invoke(%q, %s, {\"ticket_id\": \"T-100\"}, %q)\n\nJavaScript SDK\nawait client.invoke(%q, %s, { ticket_id: \"T-100\" }, %q)", endpoint, requestHeaders, string(payload), id, string(inputJSON), version, id, string(inputJSON), version)
+}
+
+func capabilityDefinitionJSON(capability api.Capability) string {
+	definition := map[string]any{
+		"schema_version": 1,
+		"id":             capability.ID,
+		"version":        capability.Version,
+		"name":           capability.Name,
+		"description":    capability.Description,
+		"model":          capability.Model,
+		"input":          capability.Input,
+		"questions":      capability.Questions,
+		"activate":       false,
+	}
+	payload, _ := json.MarshalIndent(definition, "", "  ")
+	return string(payload)
 }
 
 func sampleCapabilityInput(inputContract map[string]any) map[string]any {

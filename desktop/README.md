@@ -116,6 +116,10 @@ ticket routing, and document risk triage. A non-specialist can choose a
 workflow, adjust its business fields and decisions, and publish it without
 writing raw Laya/Jev questions.
 
+Each published capability also has a **Copy capability JSON** action. The
+result can be committed to a repository or passed to
+`modelctl capabilities publish --json` for promotion to another environment.
+
 The self-contained Windows launcher starts `Modelctl.exe` directly. The desktop
 Supervisor verifies and starts the bundled Node/Python runtime, so a packaged
 installation does not require a global `modelctl`, Node.js, or Python command.
