@@ -323,13 +323,17 @@ Creates or replaces a capability by id. The minimal body is:
 
 ### `POST /v1/capabilities/{id}/invoke`
 
-Requires a ready instance for the capability's pinned model and variant.
+Requires the capability's model variant to be downloaded. If no matching ready
+instance exists, the daemon starts one automatically and waits for its health
+check before invoking it. This keeps application services independent from
+adapter ports and instance lifecycle. If the variant is not downloaded, the
+request returns `409 MODEL_NOT_INSTALLED` with the model and variant to prepare.
 
 ```json
 {"input": {"text": "The customer was charged twice and wants a refund."}, "metadata": {"ticket_id": "T-100"}}
 ```
 
-The response includes the stable capability id/version, typed output, raw model response, model metadata, and a replayable `run_id`. If the matching instance is not ready, the daemon returns `503 CAPABILITY_NOT_READY` with the model and variant that must be started by the desktop console or CLI.
+The response includes the stable capability id/version, typed output, raw model response, model metadata, and a replayable `run_id`.
 
 ### `GET /v1/runs/{run_id}`
 

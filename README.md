@@ -212,3 +212,9 @@ MODELCTL_HOST=0.0.0.0 MODELCTL_API_TOKEN=replace-me node bin/modelctl.js daemon
 The desktop console remains the administration surface. Business systems call
 `/v1/capabilities/{id}/invoke`, while model files and adapter ports stay private
 inside the Modelctl runtime.
+
+Once the selected variant has been downloaded, the first capability request
+starts its matching runtime automatically. The application only needs the
+capability URL and its input contract; it does not need to start an instance or
+manage an adapter port. A request for an undownloaded variant returns
+`MODEL_NOT_INSTALLED` so deployment automation can prepare the exact model.
