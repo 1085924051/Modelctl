@@ -35,6 +35,6 @@ func (d *Desktop) renderSettings() {
 		widget.NewLabel("The token stays in memory and is never included in copied REST or SDK examples."),
 		container.NewHBox(apply, status),
 	)
-	d.page.Content = container.NewVScroll(container.NewVBox(widget.NewCard("Service connection", "Local or enterprise endpoint", box)))
+	d.page.Content = container.NewVBox(widget.NewCard("Service connection", "Local or enterprise endpoint", box))
 	d.page.Refresh()
 }

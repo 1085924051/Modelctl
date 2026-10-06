@@ -31,7 +31,7 @@ func (d *Desktop) renderHistory() {
 			))
 		}
 	}
-	d.page.Content = container.NewVScroll(box)
+	d.page.Content = box
 	d.page.Refresh()
 }
 

@@ -90,6 +90,12 @@ func (d *Desktop) renderCapabilities() {
 		box.Add(widget.NewLabelWithStyle("Published capabilities", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 		for _, capability := range d.capabilities {
 			capability := capability
+			snippet := capabilitySnippet(d.client.BaseURL(), capability.ID, d.client.HasToken())
+			integration := widget.NewMultiLineEntry()
+			integration.SetText(snippet)
+			integration.SetMinRowsVisible(11)
+			integration.Disable()
+			copySnippet := widget.NewButton("Copy integration example", func() { d.app.Clipboard().SetContent(snippet) })
 			versionStatus := widget.NewLabel("Active: "+capability.Version)
 			versionButtons := container.NewHBox()
 			for _, version := range capability.AvailableVersions {
@@ -157,11 +163,12 @@ func (d *Desktop) renderCapabilities() {
 				batchInput,
 				container.NewHBox(batchButton, batchStatus),
 				widget.NewLabel("Integration example"),
-				widget.NewLabel(capabilitySnippet(d.client.BaseURL(), capability.ID)),
+				copySnippet,
+				integration,
 			)))
 		}
 	}
-	d.page.Content = container.NewVScroll(box)
+	d.page.Content = box
 	d.page.Refresh()
 }
 
@@ -221,8 +228,10 @@ func buildCapabilityQuestion(id, kind, instructions, criteria string) (map[strin
 	return map[string]api.Question{id: question}, nil
 }
 
-func capabilitySnippet(baseURL, id string) string {
+func capabilitySnippet(baseURL, id string, authenticated bool) string {
 	payload, _ := json.Marshal(map[string]any{"input": map[string]string{"text": "your text here"}})
 	endpoint := fmt.Sprintf("%s/v1/capabilities/%s/invoke", baseURL, id)
-	return fmt.Sprintf("REST\nPOST %s\nAuthorization: Bearer $MODELCTL_API_TOKEN\nContent-Type: application/json\n\n%s\n\nPython SDK\nclient.invoke(%q, {\"text\": \"your text here\"})\n\nJavaScript SDK\nawait client.invoke(%q, { text: \"your text here\" })", endpoint, string(payload), id, id)
+	requestHeaders := "Content-Type: application/json"
+	if authenticated { requestHeaders = "Authorization: Bearer $MODELCTL_API_TOKEN\n" + requestHeaders }
+	return fmt.Sprintf("REST\nPOST %s\n%s\n\n%s\n\nPython SDK\nclient.invoke(%q, {\"text\": \"your text here\"})\n\nJavaScript SDK\nawait client.invoke(%q, { text: \"your text here\" })", endpoint, requestHeaders, string(payload), id, id)
 }
