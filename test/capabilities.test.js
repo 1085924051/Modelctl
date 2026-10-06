@@ -66,6 +66,20 @@ test("capabilities can be published and listed", async () => {
   assert.deepEqual(schema.body.response_schema.properties.output.properties.refund.required, ["type", "noul"]);
 });
 
+test("capability schema exposes choice and score output contracts", async () => {
+  await request("/v1/capabilities", "POST", {
+    ...capability,
+    id: "ticket-routing",
+    questions: {
+      team: { type: "choice", instructions: "Which team?", criteria: { billing: "Billing", support: "Support" } },
+      priority: { type: "score", instructions: "How urgent?", criteria: ["low", "medium", "high"] },
+    },
+  });
+  const schema = await request("/v1/capabilities/ticket-routing/schema");
+  assert.deepEqual(schema.body.response_schema.properties.output.properties.team.properties.choice.enum, ["billing", "support"]);
+  assert.deepEqual(schema.body.response_schema.properties.output.properties.priority.required, ["type", "score"]);
+});
+
 test("run history is available as a replayable collection", async () => {
   const result = await request("/v1/runs");
   assert.equal(result.status, 200);
