@@ -84,6 +84,7 @@ func (d *Desktop) layout() fyne.CanvasObject {
 		widget.NewButton("Running", func() { d.showPage("running") }),
 		widget.NewButton("Playground", func() { d.showPage("playground") }),
 		widget.NewButton("Capabilities", func() { d.showPage("capabilities") }),
+		widget.NewButton("Integration", func() { d.showPage("integration") }),
 		widget.NewButton("History", func() { d.showPage("history") }),
 		widget.NewButton("Settings", func() { d.showPage("settings") }),
 		layout.NewSpacer(),
@@ -101,6 +102,8 @@ func (d *Desktop) showPage(page string) {
 		d.renderPlayground()
 	case "capabilities":
 		d.renderCapabilities()
+	case "integration":
+		d.renderIntegration()
 	case "history":
 		d.renderHistory()
 	case "settings":

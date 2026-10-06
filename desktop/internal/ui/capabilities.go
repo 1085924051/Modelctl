@@ -249,6 +249,7 @@ func (d *Desktop) renderCapabilities() {
 			box.Add(widget.NewCard(capability.Name, capability.ID+" v"+capability.Version, container.NewVBox(
 				widget.NewLabel(capability.Description),
 				widget.NewLabel(fmt.Sprintf("Model: %s · %s · %s", capability.Model.ModelID, capability.Model.Variant, capability.Model.Profile)),
+				widget.NewButton("Open Integration", func() { d.showPage("integration") }),
 				versionStatus,
 				versionButtons,
 				container.NewHBox(viewSchema, schemaStatus),

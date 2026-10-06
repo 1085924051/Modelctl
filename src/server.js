@@ -52,6 +52,8 @@ async function route(req, res, rid, baseUrl) {
   if (req.method === "GET" && capabilityMatch) return getCapability(capabilityMatch[1], url.searchParams.get("version"), res);
   const capabilitySchemaMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/schema$/);
   if (req.method === "GET" && capabilitySchemaMatch) return getCapabilitySchema(capabilitySchemaMatch[1], url.searchParams.get("version"), res);
+  const capabilityIntegrationMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/integration$/);
+  if (req.method === "GET" && capabilityIntegrationMatch) return getCapabilityIntegration(capabilityIntegrationMatch[1], url.searchParams.get("version"), baseUrl, res);
   const invokeCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/invoke$/);
   if (req.method === "POST" && invokeCapabilityMatch) return invokeCapability(invokeCapabilityMatch[1], url.searchParams.get("version"), req, res);
   const batchCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/batch$/);
@@ -399,6 +401,50 @@ async function getCapabilitySchema(id, version, res) {
     request_schema: { type: "object", required: ["input"], properties: { input: inputSchema, metadata: { type: "object" } } },
     response_schema: { type: "object", required: ["output", "run_id"], properties: { output: { type: "object", required: Object.keys(outputProperties), properties: outputProperties }, raw: { type: "object" }, model: { type: "object" }, metadata: { type: "object" }, run_id: { type: "string" } } },
   });
+}
+
+async function getCapabilityIntegration(id, version, baseUrl, res) {
+  const state = await readState();
+  const capability = resolveCapability(state, id, version);
+  const schema = await capabilitySchema(capability);
+  const endpoint = `${baseUrl}/v1/capabilities/${encodeURIComponent(capability.id)}/invoke?version=${encodeURIComponent(capability.version)}`;
+  const input = sampleCapabilityInput(capability.input);
+  const payload = JSON.stringify({ input, metadata: { ticket_id: "T-100" } }, null, 2);
+  const authRequired = Boolean(process.env.MODELCTL_API_TOKEN);
+  const authHeader = authRequired ? "Authorization: Bearer $MODELCTL_API_TOKEN\n" : "";
+  const curlAuth = authRequired ? "  -H 'Authorization: Bearer $MODELCTL_API_TOKEN' \\\n" : "";
+  const examples = {
+    curl: `curl ${endpoint} \\\n${curlAuth}  -H 'Content-Type: application/json' \\\n  -d '${payload.replaceAll("'", "'\\\"'\\\"'")}'`,
+    python: `${authRequired ? "import os\n" : ""}from modelctl_client import Modelctl\n\nclient = Modelctl(${JSON.stringify(baseUrl)}${authRequired ? ", token=os.environ.get(\"MODELCTL_API_TOKEN\")" : ""})\nresult = client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, {"ticket_id": "T-100"}, ${JSON.stringify(capability.version)})\nprint(result["output"])`,
+    javascript: `import { Modelctl } from "modelctl-client";\n\nconst client = new Modelctl(${JSON.stringify(baseUrl)}${authRequired ? ", { token: process.env.MODELCTL_API_TOKEN }" : ""});\nconst result = await client.invoke(${JSON.stringify(capability.id)}, ${JSON.stringify(input)}, { ticket_id: "T-100" }, ${JSON.stringify(capability.version)});\nconsole.log(result.output);`,
+  };
+  return jsonResponse(res, 200, {
+    capability: { id: capability.id, version: capability.version, name: capability.name, description: capability.description },
+    base_url: baseUrl,
+    endpoint,
+    auth: { required: authRequired, scheme: authRequired ? "bearer" : "none", header: authHeader.trim() || null, environment_variable: authRequired ? "MODELCTL_API_TOKEN" : null },
+    request_schema: schema.request_schema,
+    response_schema: schema.response_schema,
+    examples,
+    errors: ["CAPABILITY_NOT_FOUND", "MODEL_NOT_INSTALLED", "INPUT_INVALID", "UNAUTHORIZED"],
+  });
+}
+
+async function capabilitySchema(capability) {
+  const field = capability.input?.field || "text";
+  const outputProperties = Object.fromEntries(Object.entries(capability.questions || {}).map(([questionID, question]) => [questionID, answerSchema(question)]));
+  const inputSchema = capability.input?.fields ? structuredInputSchema(capability.input) : { type: "object", required: [field], properties: { [field]: { type: "string" } } };
+  return {
+    request_schema: { type: "object", required: ["input"], properties: { input: inputSchema, metadata: { type: "object" } } },
+    response_schema: { type: "object", required: ["output", "run_id"], properties: { output: { type: "object", required: Object.keys(outputProperties), properties: outputProperties }, raw: { type: "object" }, model: { type: "object" }, metadata: { type: "object" }, run_id: { type: "string" } } },
+  };
+}
+
+function sampleCapabilityInput(inputContract) {
+  if (inputContract?.fields) {
+    return Object.fromEntries(Object.entries(inputContract.fields).map(([id, definition]) => [id, definition.type === "number" ? 0 : definition.type === "boolean" ? false : "your text here"]));
+  }
+  return { [inputContract?.field || "text"]: "your text here" };
 }
 
 function answerSchema(question) {

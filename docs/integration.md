@@ -49,6 +49,13 @@ Use `GET /v1/capabilities/{id}/schema` before generating a form, validating a
 queue message, or writing a contract test. Use `?version=1.0.0` when a service
 needs a pinned contract during a gradual rollout.
 
+After publishing, `GET /v1/capabilities/{id}/integration?version=1.0.0` returns
+the complete handoff package used by the Desktop Integration page: the fixed
+endpoint, authentication policy, request and response schemas, expected error
+codes, and copyable curl, Python, and JavaScript examples. The same package is
+available from `modelctl capabilities integration <id> --version 1.0.0` and the
+`client.integration(...)` method in both SDKs.
+
 The repository includes a complete copyable example in
 [`examples/integration`](../examples/integration): publish the capability,
 inspect its request/response schema, invoke one ticket, and submit a batch of

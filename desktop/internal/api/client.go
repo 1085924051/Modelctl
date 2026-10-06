@@ -175,7 +175,7 @@ type SystemOneRequest struct {
 
 type Answer struct {
 	Type          string             `json:"type"`
-	Value         any               `json:"value,omitempty"`
+	Value         any                `json:"value,omitempty"`
 	Choice        string             `json:"choice,omitempty"`
 	Noul          float64            `json:"noul,omitempty"`
 	Score         any                `json:"score,omitempty"`
@@ -198,22 +198,24 @@ type CapabilityModel struct {
 }
 
 type Capability struct {
-	SchemaVersion int                    `json:"schema_version"`
-	ID            string                 `json:"id"`
-	Version       string                 `json:"version"`
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description"`
-	Model         CapabilityModel        `json:"model"`
-	Input         map[string]any         `json:"input"`
-	Questions     map[string]Question    `json:"questions"`
-	CreatedAt     string                 `json:"created_at"`
-	UpdatedAt     string                 `json:"updated_at"`
-	Active        bool                   `json:"active"`
+	SchemaVersion     int                 `json:"schema_version"`
+	ID                string              `json:"id"`
+	Version           string              `json:"version"`
+	Name              string              `json:"name"`
+	Description       string              `json:"description"`
+	Model             CapabilityModel     `json:"model"`
+	Input             map[string]any      `json:"input"`
+	Questions         map[string]Question `json:"questions"`
+	CreatedAt         string              `json:"created_at"`
+	UpdatedAt         string              `json:"updated_at"`
+	Active            bool                `json:"active"`
 	AvailableVersions []string            `json:"available_versions"`
-	Activate      *bool                  `json:"activate,omitempty"`
+	Activate          *bool               `json:"activate,omitempty"`
 }
 
-type CapabilitiesResponse struct { Items []Capability `json:"items"` }
+type CapabilitiesResponse struct {
+	Items []Capability `json:"items"`
+}
 
 type CapabilityInvokeRequest struct {
 	Input    map[string]any `json:"input"`
@@ -227,19 +229,30 @@ type CapabilityBatchResponse struct {
 }
 
 type CapabilitySchema struct {
-	Capability    map[string]any `json:"capability"`
-	RequestSchema map[string]any `json:"request_schema"`
+	Capability     map[string]any `json:"capability"`
+	RequestSchema  map[string]any `json:"request_schema"`
 	ResponseSchema map[string]any `json:"response_schema"`
 }
 
+type CapabilityIntegration struct {
+	Capability     map[string]any    `json:"capability"`
+	BaseURL        string            `json:"base_url"`
+	Endpoint       string            `json:"endpoint"`
+	Auth           map[string]any    `json:"auth"`
+	RequestSchema  map[string]any    `json:"request_schema"`
+	ResponseSchema map[string]any    `json:"response_schema"`
+	Examples       map[string]string `json:"examples"`
+	Errors         []string          `json:"errors"`
+}
+
 type CapabilityInvokeResponse struct {
-	RequestID string         `json:"request_id"`
-	Capability map[string]any `json:"capability"`
-	Output    map[string]Answer `json:"output"`
-	Raw       SystemOneResponse `json:"raw"`
-	Model     ModelRef          `json:"model"`
-	Metadata  map[string]any    `json:"metadata,omitempty"`
-	RunID     string            `json:"run_id"`
+	RequestID  string            `json:"request_id"`
+	Capability map[string]any    `json:"capability"`
+	Output     map[string]Answer `json:"output"`
+	Raw        SystemOneResponse `json:"raw"`
+	Model      ModelRef          `json:"model"`
+	Metadata   map[string]any    `json:"metadata,omitempty"`
+	RunID      string            `json:"run_id"`
 }
 
 type APIError struct {
@@ -333,7 +346,9 @@ type Run struct {
 	CreatedAt         string            `json:"created_at"`
 }
 
-type RunsResponse struct { Items []Run `json:"items"` }
+type RunsResponse struct {
+	Items []Run `json:"items"`
+}
 
 func (c *Client) Capabilities() (CapabilitiesResponse, error) {
 	var result CapabilitiesResponse
@@ -355,24 +370,40 @@ func (c *Client) ActivateCapability(id, version string) (Capability, error) {
 
 func (c *Client) InvokeCapability(id string, request CapabilityInvokeRequest, version ...string) (CapabilityInvokeResponse, error) {
 	var result CapabilityInvokeResponse
-	path := "/v1/capabilities/"+url.PathEscape(id)+"/invoke"
-	if len(version) > 0 && version[0] != "" { path += "?version=" + url.QueryEscape(version[0]) }
+	path := "/v1/capabilities/" + url.PathEscape(id) + "/invoke"
+	if len(version) > 0 && version[0] != "" {
+		path += "?version=" + url.QueryEscape(version[0])
+	}
 	err := c.do(http.MethodPost, path, request, &result)
 	return result, err
 }
 
 func (c *Client) CreateCapabilityBatch(id string, items []CapabilityInvokeRequest, version ...string) (CapabilityBatchResponse, error) {
 	var result CapabilityBatchResponse
-	path := "/v1/capabilities/"+url.PathEscape(id)+"/batch"
-	if len(version) > 0 && version[0] != "" { path += "?version=" + url.QueryEscape(version[0]) }
+	path := "/v1/capabilities/" + url.PathEscape(id) + "/batch"
+	if len(version) > 0 && version[0] != "" {
+		path += "?version=" + url.QueryEscape(version[0])
+	}
 	err := c.do(http.MethodPost, path, map[string]any{"items": items}, &result)
 	return result, err
 }
 
 func (c *Client) CapabilitySchema(id string, version ...string) (CapabilitySchema, error) {
 	var result CapabilitySchema
-	path := "/v1/capabilities/"+url.PathEscape(id)+"/schema"
-	if len(version) > 0 && version[0] != "" { path += "?version=" + url.QueryEscape(version[0]) }
+	path := "/v1/capabilities/" + url.PathEscape(id) + "/schema"
+	if len(version) > 0 && version[0] != "" {
+		path += "?version=" + url.QueryEscape(version[0])
+	}
+	err := c.do(http.MethodGet, path, nil, &result)
+	return result, err
+}
+
+func (c *Client) CapabilityIntegration(id string, version ...string) (CapabilityIntegration, error) {
+	var result CapabilityIntegration
+	path := "/v1/capabilities/" + url.PathEscape(id) + "/integration"
+	if len(version) > 0 && version[0] != "" {
+		path += "?version=" + url.QueryEscape(version[0])
+	}
 	err := c.do(http.MethodGet, path, nil, &result)
 	return result, err
 }

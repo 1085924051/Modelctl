@@ -1,0 +1,124 @@
+package ui
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
+	"github.com/1085924051/modelctl/desktop/internal/api"
+)
+
+// renderIntegration is the customer handoff surface: a published capability
+// becomes a copyable, versioned contract for a business service.
+func (d *Desktop) renderIntegration() {
+	box := container.NewVBox(
+		widget.NewLabelWithStyle("Integration", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel("Connect your order system, helpdesk, ERP, or application to a published capability. The integration contract hides model and Laya/Jev details."),
+	)
+	if len(d.capabilities) == 0 {
+		box.Add(widget.NewCard("No published capabilities", "Publish one first", container.NewVBox(
+			widget.NewLabel("Create and test a capability in Capabilities, then return here to copy the production request."),
+			widget.NewButton("Open Capabilities", func() { d.showPage("capabilities") }),
+		)))
+		d.page.Content = box
+		d.page.Refresh()
+		return
+	}
+
+	labels := make([]string, 0, len(d.capabilities))
+	byLabel := map[string]api.Capability{}
+	for _, capability := range d.capabilities {
+		label := fmt.Sprintf("%s  ·  %s", capability.ID, capability.Version)
+		labels = append(labels, label)
+		byLabel[label] = capability
+	}
+	sort.Strings(labels)
+	selectCapability := widget.NewSelect(labels, nil)
+	selectCapability.SetSelected(labels[0])
+	status := widget.NewLabel("")
+	detail := container.NewVBox()
+	box.Add(widget.NewCard("Choose a capability", "Production callers should pin a version", container.NewVBox(selectCapability, status)))
+	box.Add(detail)
+
+	load := func(capability api.Capability) {
+		status.SetText("Loading integration contract…")
+		detail.RemoveAll()
+		go func() {
+			integration, err := d.client.CapabilityIntegration(capability.ID, capability.Version)
+			fyne.Do(func() {
+				if err != nil {
+					status.SetText(err.Error())
+					return
+				}
+				status.SetText("Contract ready · pin " + capability.ID + "@" + capability.Version + " in production")
+				populateIntegrationDetail(d, detail, integration)
+				d.page.Refresh()
+			})
+		}()
+	}
+	selectCapability.OnChanged = func(label string) {
+		if capability, ok := byLabel[label]; ok {
+			load(capability)
+		}
+	}
+	load(byLabel[labels[0]])
+
+	d.page.Content = box
+	d.page.Refresh()
+}
+
+func populateIntegrationDetail(d *Desktop, detail *fyne.Container, integration api.CapabilityIntegration) {
+	capabilityName, _ := integration.Capability["name"].(string)
+	authRequired, _ := integration.Auth["required"].(bool)
+	authText := "No token required in local loopback mode"
+	if authRequired {
+		authText = "Bearer token required · use MODELCTL_API_TOKEN in the business service secret store"
+	}
+	detail.Add(widget.NewCard(capabilityName, "Business service connection", container.NewVBox(
+		widget.NewLabel("Endpoint"),
+		copyableText(d, integration.Endpoint),
+		widget.NewLabel(authText),
+		widget.NewLabel("The endpoint is versioned. Modelctl starts the matching local runtime automatically after the model is installed."),
+	)))
+
+	requestSchema, _ := json.MarshalIndent(integration.RequestSchema, "", "  ")
+	responseSchema, _ := json.MarshalIndent(integration.ResponseSchema, "", "  ")
+	detail.Add(widget.NewAccordion(
+		widget.NewAccordionItem("Request schema", readOnlyCode(string(requestSchema), 10)),
+		widget.NewAccordionItem("Response schema", readOnlyCode(string(responseSchema), 10)),
+	))
+
+	keys := make([]string, 0, len(integration.Examples))
+	for key := range integration.Examples {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		code := integration.Examples[key]
+		codeView := readOnlyCode(code, 10)
+		copyButton := widget.NewButton("Copy", func() { d.app.Clipboard().SetContent(code) })
+		detail.Add(widget.NewCard(strings.ToUpper(key), "Copy this example into the business service", container.NewVBox(copyButton, codeView)))
+	}
+	if len(integration.Errors) > 0 {
+		detail.Add(widget.NewLabel("Expected errors: " + strings.Join(integration.Errors, " · ")))
+	}
+}
+
+func copyableText(d *Desktop, value string) fyne.CanvasObject {
+	entry := widget.NewEntry()
+	entry.SetText(value)
+	entry.Disable()
+	return container.NewBorder(nil, nil, nil, widget.NewButton("Copy", func() { d.app.Clipboard().SetContent(value) }), entry)
+}
+
+func readOnlyCode(value string, rows int) *widget.Entry {
+	entry := widget.NewMultiLineEntry()
+	entry.SetText(value)
+	entry.SetMinRowsVisible(rows)
+	entry.Disable()
+	return entry
+}

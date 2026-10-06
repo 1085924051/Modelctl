@@ -32,6 +32,11 @@ class Modelctl:
         suffix = f"?version={quote(version, safe='')}" if version else ""
         return self._request("GET", f"/v1/capabilities/{quote(capability_id, safe='')}/schema{suffix}")
 
+    def integration(self, capability_id: str, version: str | None = None) -> dict:
+        """Return the copyable business-service handoff contract."""
+        suffix = f"?version={quote(version, safe='')}" if version else ""
+        return self._request("GET", f"/v1/capabilities/{quote(capability_id, safe='')}/integration{suffix}")
+
     def runs(self) -> list[dict]:
         return self._request("GET", "/v1/runs").get("items", [])
 

@@ -40,6 +40,11 @@ export async function main(argv = process.argv.slice(2)) {
       const version = option(rest, "version");
       return print(await get(`${base}/v1/capabilities/${encodeURIComponent(id)}/schema${version ? `?version=${encodeURIComponent(version)}` : ""}`));
     }
+    if (subcommand === "integration") {
+      const id = rest[0]; if (!id) throw new Error("capabilities integration requires <capability-id>");
+      const version = option(rest, "version");
+      return print(await get(`${base}/v1/capabilities/${encodeURIComponent(id)}/integration${version ? `?version=${encodeURIComponent(version)}` : ""}`));
+    }
     if (subcommand === "invoke") {
       const id = rest[0]; const file = option(rest, "json");
       if (!id || !file) throw new Error("capabilities invoke requires <capability-id> --json <file>");
@@ -63,7 +68,7 @@ export async function main(argv = process.argv.slice(2)) {
       if (!id || !version) throw new Error("capabilities activate requires <capability-id> --version <version>");
       return print(await post(`${base}/v1/capabilities/${encodeURIComponent(id)}/activate`, { version }));
     }
-    throw new Error("capabilities requires list, schema, invoke, batch, publish, or activate");
+    throw new Error("capabilities requires list, schema, integration, invoke, batch, publish, or activate");
   }
   if (command === "catalog" && subcommand === "list") return print(await get(`${base}/v1/models`));
   if (command === "inspect") {
@@ -201,4 +206,4 @@ async function doctor() {
   print(report);
   if (!report.node.supported || !report.python?.supported || !report.platform_supported || !report.catalog_valid) process.exitCode = 1;
 }
-function usage() { console.log(`modelctl\n\n  setup                  install the private Laya runtime\n  doctor                 check local runtime prerequisites\n  catalog validate|list  validate or list model catalog\n  inspect                list models and install state\n  pull <model> [--variant v] [--detach]\n  run <model> [--variant v] [--profile p]\n  ps | tasks | cancel <task-id> | logs <id> | stop <id>\n  remove <model> [--variant v] [--purge]\n  invoke <instance> <operation> --json file\n  capabilities list|schema|invoke|batch|publish|activate\n  capabilities invoke <id> --json file [--version v]\n  capabilities batch <id> --json file [--version v] [--wait]\n  daemon                 start local API in the foreground\n  data                   show data directory\n\n  modelctl-mcp           start MCP stdio proxy`); }
+function usage() { console.log(`modelctl\n\n  setup                  install the private Laya runtime\n  doctor                 check local runtime prerequisites\n  catalog validate|list  validate or list model catalog\n  inspect                list models and install state\n  pull <model> [--variant v] [--detach]\n  run <model> [--variant v] [--profile p]\n  ps | tasks | cancel <task-id> | logs <id> | stop <id>\n  remove <model> [--variant v] [--purge]\n  invoke <instance> <operation> --json file\n  capabilities list|schema|integration|invoke|batch|publish|activate\n  capabilities invoke <id> --json file [--version v]\n  capabilities batch <id> --json file [--version v] [--wait]\n  daemon                 start local API in the foreground\n  data                   show data directory\n\n  modelctl-mcp           start MCP stdio proxy`); }

@@ -23,6 +23,11 @@ export class Modelctl {
     return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/schema${suffix}`);
   }
 
+  async integration(capabilityId, version) {
+    const suffix = version ? `?version=${encodeURIComponent(version)}` : "";
+    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/integration${suffix}`);
+  }
+
   async runs() {
     return (await this.request("/v1/runs")).items || [];
   }

@@ -9,6 +9,10 @@ from modelctl_client import Modelctl
 client = Modelctl("http://127.0.0.1:11435")
 result = client.invoke("refund-check", {"text": "The customer was charged twice."})
 print(result["output"])
+
+# Inspect the same contract that the Desktop Integration page displays.
+contract = client.integration("refund-check", "1.0.0")
+print(contract["endpoint"], contract["request_schema"])
 ```
 
 ```js
@@ -17,6 +21,9 @@ import { Modelctl } from "./modelctl-client.mjs";
 const client = new Modelctl("http://127.0.0.1:11435");
 const result = await client.invoke("refund-check", { text: "The customer was charged twice." });
 console.log(result.output);
+
+const contract = await client.integration("refund-check", "1.0.0");
+console.log(contract.endpoint, contract.request_schema);
 ```
 
 For enterprise server mode, pass the API token to the constructor or set

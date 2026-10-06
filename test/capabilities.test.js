@@ -70,6 +70,21 @@ test("capabilities can be published and listed", async () => {
   assert.deepEqual(schema.body.response_schema.properties.output.properties.refund.required, ["type", "value", "noul"]);
 });
 
+test("capability integration endpoint returns a versioned handoff contract", async () => {
+  await request("/v1/capabilities", "POST", capability);
+  const integration = await request("/v1/capabilities/refund-check/integration?version=1.0.0");
+  assert.equal(integration.status, 200);
+  assert.equal(integration.body.capability.id, "refund-check");
+  assert.equal(integration.body.capability.version, "1.0.0");
+  assert.match(integration.body.endpoint, /\/v1\/capabilities\/refund-check\/invoke\?version=1\.0\.0$/);
+  assert.equal(integration.body.auth.required, false);
+  assert.match(integration.body.examples.curl, /refund-check/);
+  assert.doesNotMatch(integration.body.examples.curl, /\\n\+/);
+  assert.match(integration.body.examples.python, /client\.invoke/);
+  assert.match(integration.body.examples.javascript, /client\.invoke/);
+  assert.deepEqual(integration.body.request_schema.properties.input.required, ["text"]);
+});
+
 test("capability schema exposes choice and score output contracts", async () => {
   await request("/v1/capabilities", "POST", {
     ...capability,
@@ -216,6 +231,32 @@ test("capability invocation returns normalized answers and preserves metadata", 
   assert.equal(task.body.results.length, 2);
   assert.equal(task.body.results[0].output.refund.value, 0.93);
   assert.deepEqual(task.body.results[1].metadata, { ticket_id: "T-102" });
+});
+
+test("Jev-compatible raw systemone requests remain available", async () => {
+  let forwarded;
+  adapter = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    forwarded = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ answers: { topic: { type: "noul", noul: 0.71 } } }));
+  });
+  await new Promise((resolve) => adapter.listen(0, "127.0.0.1", resolve));
+  await updateState((state) => {
+    state.instances["inst_jev_compat"] = {
+      id: "inst_jev_compat", status: "ready", model: { id: "convaiinnovations/laya", version: "0.3.18", revision: "cf7c54c0586eede67d827dfaab8cd2d2007273e", variant: "english" },
+      runtime: "laya-python@0.3.18", profile: "cpu", device: "cpu", host: "127.0.0.1", port: adapter.address().port,
+      capabilities: ["system_one"], default: true,
+    };
+  });
+  const result = await request("/v1/systemone", "POST", {
+    state: { body: "A customer wants to cancel the order." },
+    questions: { topic: { type: "noul", instructions: "Is this about cancellation?" } },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.answers.topic.noul, 0.71);
+  assert.equal(forwarded.questions.topic.type, "noul");
 });
 
 test("structured capability inputs validate fields and render the Laya prompt", async () => {
