@@ -12,6 +12,12 @@ import (
 	"github.com/1085924051/modelctl/desktop/internal/api"
 )
 
+type capabilityVersionSelection struct {
+	ID      string
+	Version string
+	Name    string
+}
+
 // renderIntegration is the customer handoff surface: a published capability
 // becomes a copyable, versioned contract for a business service.
 func (d *Desktop) renderIntegration() {
@@ -29,12 +35,13 @@ func (d *Desktop) renderIntegration() {
 		return
 	}
 
-	labels := make([]string, 0, len(d.capabilities))
-	byLabel := map[string]api.Capability{}
-	for _, capability := range d.capabilities {
-		label := fmt.Sprintf("%s  ·  %s", capability.ID, capability.Version)
+	selections := buildCapabilityVersionSelections(d.capabilities)
+	labels := make([]string, 0, len(selections))
+	byLabel := map[string]capabilityVersionSelection{}
+	for _, selection := range selections {
+		label := fmt.Sprintf("%s  ·  %s", selection.ID, selection.Version)
 		labels = append(labels, label)
-		byLabel[label] = capability
+		byLabel[label] = selection
 	}
 	sort.Strings(labels)
 	selectCapability := widget.NewSelect(labels, nil)
@@ -44,31 +51,54 @@ func (d *Desktop) renderIntegration() {
 	box.Add(widget.NewCard("Choose a capability", "Production callers should pin a version", container.NewVBox(selectCapability, status)))
 	box.Add(detail)
 
-	load := func(capability api.Capability) {
+	load := func(selection capabilityVersionSelection) {
 		status.SetText("Loading integration contract…")
 		detail.RemoveAll()
 		go func() {
-			integration, err := d.client.CapabilityIntegration(capability.ID, capability.Version)
+			integration, err := d.client.CapabilityIntegration(selection.ID, selection.Version)
 			fyne.Do(func() {
 				if err != nil {
 					status.SetText(err.Error())
 					return
 				}
-				status.SetText("Contract ready · pin " + capability.ID + "@" + capability.Version + " in production")
+				status.SetText("Contract ready · pin " + selection.ID + "@" + selection.Version + " in production")
 				populateIntegrationDetail(d, detail, integration)
 				d.page.Refresh()
 			})
 		}()
 	}
 	selectCapability.OnChanged = func(label string) {
-		if capability, ok := byLabel[label]; ok {
-			load(capability)
+		if selection, ok := byLabel[label]; ok {
+			load(selection)
 		}
 	}
 	load(byLabel[labels[0]])
 
 	d.page.Content = box
 	d.page.Refresh()
+}
+
+func buildCapabilityVersionSelections(capabilities []api.Capability) []capabilityVersionSelection {
+	selections := []capabilityVersionSelection{}
+	for _, capability := range capabilities {
+		versions := append([]string(nil), capability.AvailableVersions...)
+		if len(versions) == 0 {
+			versions = []string{capability.Version}
+		}
+		for _, version := range versions {
+			if strings.TrimSpace(version) == "" {
+				continue
+			}
+			selections = append(selections, capabilityVersionSelection{ID: capability.ID, Version: version, Name: capability.Name})
+		}
+	}
+	sort.Slice(selections, func(i, j int) bool {
+		if selections[i].ID == selections[j].ID {
+			return selections[i].Version < selections[j].Version
+		}
+		return selections[i].ID < selections[j].ID
+	})
+	return selections
 }
 
 func populateIntegrationDetail(d *Desktop, detail *fyne.Container, integration api.CapabilityIntegration) {

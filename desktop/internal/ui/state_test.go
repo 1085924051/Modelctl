@@ -173,6 +173,22 @@ func TestCapabilitySnippetPinsVersionAndMetadata(t *testing.T) {
 	}
 }
 
+func TestBuildCapabilityVersionSelectionsIncludesPublishedHistory(t *testing.T) {
+	selections := buildCapabilityVersionSelections([]api.Capability{
+		{ID: "refund-check", Version: "1.1.0", AvailableVersions: []string{"1.0.0", "1.1.0"}},
+		{ID: "ticket-routing", Version: "1.0.0"},
+	})
+	if len(selections) != 3 {
+		t.Fatalf("selections = %#v", selections)
+	}
+	if selections[0].ID != "refund-check" || selections[0].Version != "1.0.0" || selections[1].Version != "1.1.0" {
+		t.Fatalf("versions were not sorted or preserved: %#v", selections)
+	}
+	if selections[2].ID != "ticket-routing" {
+		t.Fatalf("active-only capability missing: %#v", selections)
+	}
+}
+
 func TestBuildCapabilityInputParsesHumanFriendlyFields(t *testing.T) {
 	input, err := buildCapabilityInput("text:string:Customer message\norder_id?:string:Order number", "Message: {{text}}\\nOrder: {{order_id}}")
 	if err != nil {
