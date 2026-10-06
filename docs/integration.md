@@ -49,6 +49,11 @@ Use `GET /v1/capabilities/{id}/schema` before generating a form, validating a
 queue message, or writing a contract test. Use `?version=1.0.0` when a service
 needs a pinned contract during a gradual rollout.
 
+The repository includes a complete copyable example in
+[`examples/integration`](../examples/integration): publish the capability,
+inspect its request/response schema, invoke one ticket, and submit a batch of
+tickets with business metadata.
+
 After the model variant has been downloaded, the first capability invocation
 can start its matching runtime automatically. The business service does not
 need to call the instance lifecycle API. If the model has not been downloaded,

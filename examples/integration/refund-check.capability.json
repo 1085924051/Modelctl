@@ -1,0 +1,29 @@
+{
+  "id": "refund-check",
+  "version": "1.0.0",
+  "name": "Refund request check",
+  "description": "Decide whether a customer message asks for a refund.",
+  "model": {
+    "model_id": "convaiinnovations/laya",
+    "variant": "english",
+    "profile": "auto"
+  },
+  "input": {
+    "type": "text",
+    "field": "text"
+  },
+  "questions": {
+    "refund": {
+      "type": "noul",
+      "instructions": "Does the customer explicitly ask for a refund?"
+    },
+    "team": {
+      "type": "choice",
+      "instructions": "Which team should handle this message?",
+      "criteria": {
+        "billing": "payments, refunds, and charges",
+        "support": "technical help and account access"
+      }
+    }
+  }
+}

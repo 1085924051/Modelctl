@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "input": {
+        "text": "The customer was charged twice and wants a refund."
+      },
+      "metadata": {
+        "ticket_id": "T-100"
+      }
+    },
+    {
+      "input": {
+        "text": "The user cannot log in to the dashboard."
+      },
+      "metadata": {
+        "ticket_id": "T-101"
+      }
+    }
+  ]
+}

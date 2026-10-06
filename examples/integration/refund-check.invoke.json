@@ -1,0 +1,9 @@
+{
+  "input": {
+    "text": "The customer was charged twice and wants a refund."
+  },
+  "metadata": {
+    "ticket_id": "T-100",
+    "tenant_id": "demo"
+  }
+}
