@@ -189,6 +189,28 @@ func TestBuildCapabilityVersionSelectionsIncludesPublishedHistory(t *testing.T) 
 	}
 }
 
+func TestCapabilityTemplatesCoverCommonBusinessWorkflows(t *testing.T) {
+	templates := capabilityTemplates()
+	if len(templates) < 3 {
+		t.Fatalf("expected starter templates, got %d", len(templates))
+	}
+	seen := map[string]bool{}
+	for _, template := range templates {
+		if template.ID == "" || template.Name == "" || template.Fields == "" || template.Input == "" || len(template.Questions) == 0 {
+			t.Fatalf("incomplete template: %#v", template)
+		}
+		if seen[template.ID] {
+			t.Fatalf("duplicate template ID: %s", template.ID)
+		}
+		seen[template.ID] = true
+	}
+	for _, id := range []string{"refund-check", "ticket-routing", "document-risk"} {
+		if !seen[id] {
+			t.Fatalf("missing template %q", id)
+		}
+	}
+}
+
 func TestBuildCapabilityInputParsesHumanFriendlyFields(t *testing.T) {
 	input, err := buildCapabilityInput("text:string:Customer message\norder_id?:string:Order number", "Message: {{text}}\\nOrder: {{order_id}}")
 	if err != nil {

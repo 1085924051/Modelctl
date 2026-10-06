@@ -35,6 +35,15 @@ func (d *Desktop) renderCapabilities() {
 	inputTemplate := widget.NewMultiLineEntry()
 	inputTemplate.SetText("Customer message: {{text}}")
 	inputTemplate.SetMinRowsVisible(2)
+	templates := capabilityTemplates()
+	templateNames := []string{"Start from a template"}
+	templateByName := make(map[string]capabilityTemplate, len(templates))
+	for _, template := range templates {
+		templateNames = append(templateNames, template.Name)
+		templateByName[template.Name] = template
+	}
+	templateSelect := widget.NewSelect(templateNames, nil)
+	templateSelect.SetSelected(templateNames[0])
 	modelOptions := make([]string, 0, len(d.models))
 	modelByLabel := make(map[string]modelState)
 	for _, model := range d.models {
@@ -48,12 +57,44 @@ func (d *Desktop) renderCapabilities() {
 	}
 	questionRows := []*capabilityQuestionEditor{}
 	questionList := container.NewVBox()
+	setQuestions := func(drafts []capabilityTemplateQuestion) {
+		questionRows = nil
+		questionList.RemoveAll()
+		for index, draft := range drafts {
+			row := newCapabilityQuestionEditor(index + 1)
+			row.id.SetText(draft.ID)
+			row.kind.SetSelected(draft.Type)
+			row.instructions.SetText(draft.Instructions)
+			row.criteria.SetText(draft.Criteria)
+			if draft.Type == "noul" {
+				row.criteria.Hide()
+			} else {
+				row.criteria.Show()
+			}
+			questionRows = append(questionRows, row)
+			questionList.Add(row.view)
+		}
+		questionList.Refresh()
+	}
 	addQuestion := func() {
 		row := newCapabilityQuestionEditor(len(questionRows) + 1)
 		questionRows = append(questionRows, row)
 		questionList.Add(row.view)
 	}
-	addQuestion()
+	setQuestions([]capabilityTemplateQuestion{{ID: "refund", Type: "noul", Instructions: "Does the customer explicitly ask for a refund?"}})
+	templateSelect.OnChanged = func(templateName string) {
+		template, ok := templateByName[templateName]
+		if !ok {
+			return
+		}
+		id.SetText(template.ID)
+		version.SetText(template.Version)
+		name.SetText(template.DisplayName)
+		description.SetText(template.Description)
+		inputFields.SetText(template.Fields)
+		inputTemplate.SetText(template.Input)
+		setQuestions(template.Questions)
+	}
 	status := widget.NewLabel("")
 	activate := widget.NewCheck("Activate immediately", nil)
 	activate.SetChecked(true)
@@ -101,6 +142,9 @@ func (d *Desktop) renderCapabilities() {
 	})
 
 	form := widget.NewCard("Publish a capability", "Create a business-facing contract", container.NewVBox(
+		widget.NewLabel("Business template"),
+		templateSelect,
+		widget.NewLabel("Start with a common workflow, then adjust its fields and decisions."),
 		widget.NewLabel("ID"), id,
 		widget.NewLabel("Version"), version,
 		widget.NewLabel("Display name"), name,
