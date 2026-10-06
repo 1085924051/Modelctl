@@ -23,4 +23,22 @@ func (t modelTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) c
 	return t.Theme.Color(name, variant)
 }
 
+func (t modelTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNamePadding:
+		return 8
+	case theme.SizeNameInnerPadding:
+		return 6
+	case theme.SizeNameHeadingText:
+		return 20
+	case theme.SizeNameSubHeadingText:
+		return 15
+	case theme.SizeNameCaptionText:
+		return 12
+	case theme.SizeNameInputBorder:
+		return 1
+	}
+	return t.Theme.Size(name)
+}
+
 func newTheme() fyne.Theme { return modelTheme{Theme: theme.DefaultTheme()} }
