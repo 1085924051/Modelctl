@@ -219,7 +219,7 @@ func (d *Desktop) renderCapabilities() {
 				versionButtons.Add(button)
 			}
 			testInput := widget.NewMultiLineEntry()
-			testInput.SetText("The customer was charged twice and wants a refund.")
+			testInput.SetText(sampleCapabilityInputJSON(capability.Input))
 			testInput.SetMinRowsVisible(3)
 			testMetadata := widget.NewMultiLineEntry()
 			testMetadata.SetText("{}")
@@ -228,6 +228,12 @@ func (d *Desktop) renderCapabilities() {
 			var testButton *widget.Button
 			testButton = widget.NewButton("Test capability", func() {
 				testButton.Disable()
+				var input map[string]any
+				if err := json.Unmarshal([]byte(testInput.Text), &input); err != nil || input == nil {
+					testButton.Enable()
+					testStatus.SetText("Test input must be a JSON object matching the capability fields.")
+					return
+				}
 				var metadata map[string]any
 				if err := json.Unmarshal([]byte(testMetadata.Text), &metadata); err != nil || metadata == nil {
 					testButton.Enable()
@@ -236,7 +242,7 @@ func (d *Desktop) renderCapabilities() {
 				}
 				testStatus.SetText("Running…")
 				go func() {
-					result, err := d.client.InvokeCapability(capability.ID, api.CapabilityInvokeRequest{Input: map[string]any{"text": strings.TrimSpace(testInput.Text)}, Metadata: metadata})
+					result, err := d.client.InvokeCapability(capability.ID, api.CapabilityInvokeRequest{Input: input, Metadata: metadata})
 					fyne.Do(func() {
 						testButton.Enable()
 						if err != nil {
@@ -249,7 +255,7 @@ func (d *Desktop) renderCapabilities() {
 				}()
 			})
 			batchInput := widget.NewMultiLineEntry()
-			batchInput.SetText("The customer was charged twice and wants a refund.\nThe user cannot log in to the dashboard.")
+			batchInput.SetText(sampleBatchCapabilityInput(capability.Input))
 			batchInput.SetMinRowsVisible(3)
 			batchStatus := widget.NewLabel("")
 			var batchButton *widget.Button
@@ -257,7 +263,12 @@ func (d *Desktop) renderCapabilities() {
 				items := []api.CapabilityInvokeRequest{}
 				for _, line := range strings.Split(batchInput.Text, "\n") {
 					if text := strings.TrimSpace(line); text != "" {
-						items = append(items, api.CapabilityInvokeRequest{Input: map[string]any{"text": text}})
+						var input map[string]any
+						if err := json.Unmarshal([]byte(text), &input); err != nil || input == nil {
+							batchStatus.SetText("Each batch line must be a JSON object matching the capability fields.")
+							return
+						}
+						items = append(items, api.CapabilityInvokeRequest{Input: input})
 					}
 				}
 				if len(items) == 0 {
@@ -298,12 +309,12 @@ func (d *Desktop) renderCapabilities() {
 				versionButtons,
 				container.NewHBox(viewSchema, schemaStatus),
 				widget.NewAccordion(widget.NewAccordionItem("Schema", schemaOutput)),
-				widget.NewLabel("Test input"),
+				widget.NewLabel("Test input (JSON object matching the fields)"),
 				testInput,
 				widget.NewLabel("Test metadata (JSON object)"),
 				testMetadata,
 				container.NewHBox(testButton, testStatus),
-				widget.NewLabel("Batch test · one input per line"),
+				widget.NewLabel("Batch test · one JSON object per line"),
 				batchInput,
 				container.NewHBox(batchButton, batchStatus),
 				widget.NewLabel("Integration example"),
@@ -413,6 +424,46 @@ func buildCapabilityInput(definitionText, template string) (map[string]any, erro
 		return nil, fmt.Errorf("input template is required")
 	}
 	return map[string]any{"type": "object", "fields": fields, "template": template}, nil
+}
+
+func sampleCapabilityInputJSON(inputContract map[string]any) string {
+	payload, _ := json.MarshalIndent(sampleCapabilityInput(inputContract, "The customer was charged twice and wants a refund."), "", "  ")
+	return string(payload)
+}
+
+func sampleBatchCapabilityInput(inputContract map[string]any) string {
+	first := sampleCapabilityInput(inputContract, "The customer was charged twice and wants a refund.")
+	second := sampleCapabilityInput(inputContract, "The user cannot log in to the dashboard.")
+	firstJSON, _ := json.Marshal(first)
+	secondJSON, _ := json.Marshal(second)
+	return string(firstJSON) + "\n" + string(secondJSON)
+}
+
+func sampleCapabilityInput(inputContract map[string]any, defaultText string) map[string]any {
+	if fields, ok := inputContract["fields"].(map[string]any); ok {
+		result := make(map[string]any, len(fields))
+		for id, raw := range fields {
+			definition, _ := raw.(map[string]any)
+			switch definition["type"] {
+			case "number":
+				result[id] = 0
+			case "boolean":
+				result[id] = false
+			default:
+				if id == "text" || id == "document" {
+					result[id] = defaultText
+				} else {
+					result[id] = "your text here"
+				}
+			}
+		}
+		return result
+	}
+	field := "text"
+	if value, ok := inputContract["field"].(string); ok && value != "" {
+		field = value
+	}
+	return map[string]any{field: defaultText}
 }
 
 func buildCapabilityQuestion(id, kind, instructions, criteria string) (map[string]api.Question, error) {

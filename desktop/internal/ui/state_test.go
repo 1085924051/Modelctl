@@ -211,6 +211,27 @@ func TestCapabilityTemplatesCoverCommonBusinessWorkflows(t *testing.T) {
 	}
 }
 
+func TestCapabilityTestInputsFollowStructuredContracts(t *testing.T) {
+	input := map[string]any{
+		"type": "object",
+		"fields": map[string]any{
+			"text":     map[string]any{"type": "string", "required": true},
+			"order_id": map[string]any{"type": "string", "required": false},
+			"urgent":   map[string]any{"type": "boolean", "required": true},
+		},
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(sampleCapabilityInputJSON(input)), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded["text"] != "The customer was charged twice and wants a refund." || decoded["urgent"] != false {
+		t.Fatalf("sample input = %#v", decoded)
+	}
+	if lines := strings.Split(sampleBatchCapabilityInput(input), "\n"); len(lines) != 2 {
+		t.Fatalf("batch sample lines = %d", len(lines))
+	}
+}
+
 func TestBuildCapabilityInputParsesHumanFriendlyFields(t *testing.T) {
 	input, err := buildCapabilityInput("text:string:Customer message\norder_id?:string:Order number", "Message: {{text}}\\nOrder: {{order_id}}")
 	if err != nil {
