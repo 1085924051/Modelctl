@@ -155,6 +155,24 @@ func TestFormatResultIncludesProbabilitiesAndRawJSON(t *testing.T) {
 	}
 }
 
+func TestAnswerValuePrefersNormalizedValue(t *testing.T) {
+	if got := answerValue(api.Answer{Type: "noul", Value: 0.92, Noul: 0.41}); got != "0.92" {
+		t.Fatalf("normalized noul value = %q", got)
+	}
+	if got := answerValue(api.Answer{Type: "choice", Value: "billing", Choice: "support"}); got != "billing" {
+		t.Fatalf("normalized choice value = %q", got)
+	}
+}
+
+func TestCapabilitySnippetPinsVersionAndMetadata(t *testing.T) {
+	snippet := capabilitySnippet("http://127.0.0.1:11435", "refund-check", "1.2.0", true)
+	for _, expected := range []string{"refund-check/invoke?version=1.2.0", "MODELCTL_API_TOKEN", "ticket_id", "1.2.0"} {
+		if !strings.Contains(snippet, expected) {
+			t.Fatalf("integration snippet missing %q: %s", expected, snippet)
+		}
+	}
+}
+
 func TestParseRawRequestRejectsMissingQuestions(t *testing.T) {
 	if _, err := parseRawRequest(`{"state":{"body":"hello"}}`); err == nil {
 		t.Fatal("expected missing questions error")

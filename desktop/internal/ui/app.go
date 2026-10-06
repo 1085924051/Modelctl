@@ -254,12 +254,18 @@ func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label, pu
 	cancel.Enable()
 	var taskID string
 	cancel.OnTapped = func() {
-		if taskID == "" { return }
+		if taskID == "" {
+			return
+		}
 		cancel.Disable()
 		go func() {
 			_, err := d.client.CancelTask(taskID)
 			fyne.Do(func() {
-				if err != nil { progress.SetText(err.Error()); cancel.Enable(); return }
+				if err != nil {
+					progress.SetText(err.Error())
+					cancel.Enable()
+					return
+				}
 				progress.SetText("Cancelling download...")
 			})
 		}()
@@ -433,6 +439,9 @@ func formatRawResult(result api.SystemOneResponse) string {
 }
 
 func answerValue(answer api.Answer) string {
+	if answer.Value != nil {
+		return fmt.Sprint(answer.Value)
+	}
 	if answer.Type == "choice" {
 		return answer.Choice
 	}

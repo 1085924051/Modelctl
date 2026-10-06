@@ -5,14 +5,17 @@ import os from "node:os";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import { createServer } from "../src/server.js";
+import { idFor, updateState } from "../src/core.js";
 
 const oldDataDir = process.env.MODELCTL_DATA_DIR;
 let root;
 let server;
 let base;
+let adapter;
 
 beforeEach(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
+  if (adapter) await new Promise((resolve) => adapter.close(resolve));
   if (root) await fsp.rm(root, { recursive: true, force: true });
   root = await fsp.mkdtemp(path.join(os.tmpdir(), "modelctl-capability-"));
   process.env.MODELCTL_DATA_DIR = root;
@@ -23,6 +26,7 @@ beforeEach(async () => {
 
 after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
+  if (adapter) await new Promise((resolve) => adapter.close(resolve));
   if (root) await fsp.rm(root, { recursive: true, force: true });
   if (oldDataDir === undefined) delete process.env.MODELCTL_DATA_DIR;
   else process.env.MODELCTL_DATA_DIR = oldDataDir;
@@ -127,6 +131,61 @@ test("capability invocation explains that its model must be downloaded", async (
   const result = await request("/v1/capabilities/refund-check/invoke", "POST", { input: { text: "Please refund this order" } });
   assert.equal(result.status, 409);
   assert.equal(result.body.error.code, "MODEL_NOT_INSTALLED");
+});
+
+test("capability invocation returns normalized answers and preserves metadata", async () => {
+  adapter = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const received = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    assert.equal(received.state.body, "Please refund this order");
+    assert.ok(received.questions.refund);
+    assert.ok(received.questions.team);
+    assert.ok(received.questions.priority);
+    const response = {
+      answers: {
+        refund: { type: "noul", noul: 0.93, confidence: 0.91 },
+        team: { type: "choice", choice: "billing", confidence: 0.88 },
+        priority: { type: "score", score: 2, confidence: 0.77 },
+      },
+      usage: { latency_ms: 4 },
+    };
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(response));
+  });
+  await new Promise((resolve) => adapter.listen(0, "127.0.0.1", resolve));
+  const port = adapter.address().port;
+  await request("/v1/capabilities", "POST", {
+    ...capability,
+    questions: {
+      refund: { type: "noul", instructions: "Does the customer ask for a refund?" },
+      team: { type: "choice", instructions: "Which team?", criteria: { billing: "Billing", support: "Support" } },
+      priority: { type: "score", instructions: "How urgent?", criteria: ["low", "medium", "high"] },
+    },
+  });
+  await updateState((state) => {
+    state.models[idFor("convaiinnovations/laya", "0.3.18", "english")] = {
+      id: "convaiinnovations/laya", version: "0.3.18", revision: "cf7c54c0586eede67d827dfaab8cd2d2007273e",
+      variant: "english", path: root, installed_at: new Date().toISOString(),
+    };
+    state.instances["inst_fake"] = {
+      id: "inst_fake", status: "ready", model: { id: "convaiinnovations/laya", version: "0.3.18", revision: "cf7c54c0586eede67d827dfaab8cd2d2007273e", variant: "english" },
+      runtime: "laya-python@0.3.18", profile: "cpu", device: "cpu", host: "127.0.0.1", port,
+      capabilities: ["system_one"], default: true,
+    };
+  });
+  const result = await request("/v1/capabilities/refund-check/invoke", "POST", {
+    input: { text: "Please refund this order" }, metadata: { ticket_id: "T-100", tenant_id: "acme" },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.output.refund.value, 0.93);
+  assert.equal(result.body.output.team.value, "billing");
+  assert.equal(result.body.output.priority.value, 2);
+  assert.deepEqual(result.body.metadata, { ticket_id: "T-100", tenant_id: "acme" });
+  assert.match(result.body.run_id, /^run_/);
+  const history = await request("/v1/runs");
+  assert.deepEqual(history.body.items[0].metadata, { ticket_id: "T-100", tenant_id: "acme" });
+  assert.equal(history.body.items[0].response.answers.team.choice, "billing");
 });
 
 test("capability metadata must be an object", async () => {
