@@ -63,7 +63,7 @@ test("capabilities can be published and listed", async () => {
   assert.equal(schema.status, 200);
   assert.deepEqual(schema.body.request_schema.properties.input.required, ["text"]);
   assert.deepEqual(schema.body.response_schema.properties.output.required, ["refund"]);
-  assert.deepEqual(schema.body.response_schema.properties.output.properties.refund.required, ["type", "noul"]);
+  assert.deepEqual(schema.body.response_schema.properties.output.properties.refund.required, ["type", "value", "noul"]);
 });
 
 test("capability schema exposes choice and score output contracts", async () => {
@@ -77,7 +77,7 @@ test("capability schema exposes choice and score output contracts", async () => 
   });
   const schema = await request("/v1/capabilities/ticket-routing/schema");
   assert.deepEqual(schema.body.response_schema.properties.output.properties.team.properties.choice.enum, ["billing", "support"]);
-  assert.deepEqual(schema.body.response_schema.properties.output.properties.priority.required, ["type", "score"]);
+  assert.deepEqual(schema.body.response_schema.properties.output.properties.priority.required, ["type", "value", "score"]);
 });
 
 test("run history is available as a replayable collection", async () => {

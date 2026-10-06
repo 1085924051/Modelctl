@@ -175,6 +175,7 @@ type SystemOneRequest struct {
 
 type Answer struct {
 	Type          string             `json:"type"`
+	Value         any               `json:"value,omitempty"`
 	Choice        string             `json:"choice,omitempty"`
 	Noul          float64            `json:"noul,omitempty"`
 	Score         any                `json:"score,omitempty"`

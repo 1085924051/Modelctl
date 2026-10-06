@@ -125,6 +125,10 @@ capability version and model instance from Desktop History.
 The optional `metadata` object is stored with the run and returned in the
 response, which lets a tenant, ticket, or document ID stay attached to the
 inference record without being sent to the model as text.
+Each answer also includes a normalized `value` field: a number for `noul`, the
+selected label for `choice`, or the score payload for `score`. The original
+type-specific field (`noul`, `choice`, or `score`) remains available for clients
+that need the full model response.
 
 ### Batch processing
 

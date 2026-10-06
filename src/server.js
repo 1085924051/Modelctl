@@ -375,15 +375,18 @@ async function getCapabilitySchema(id, version, res) {
 }
 
 function answerSchema(question) {
-  const common = { type: { type: "string", enum: [question.type] }, confidence: { type: "number" }, probabilities: { type: "object" } };
+  const common = { type: { type: "string", enum: [question.type] }, value: {}, confidence: { type: "number" }, probabilities: { type: "object" } };
   if (question.type === "choice") {
     const labels = Array.isArray(question.criteria) ? question.criteria : Object.keys(question.criteria || {});
-    return { type: "object", required: ["type", "choice"], properties: { ...common, choice: { type: "string", ...(labels.length ? { enum: labels } : {}) } } };
+    const value = { type: "string", ...(labels.length ? { enum: labels } : {}) };
+    return { type: "object", required: ["type", "value", "choice"], properties: { ...common, value, choice: value } };
   }
   if (question.type === "score") {
-    return { type: "object", required: ["type", "score"], properties: { ...common, score: { type: ["number", "string", "object", "array", "null"] } } };
+    const value = { type: ["number", "string", "object", "array", "null"] };
+    return { type: "object", required: ["type", "value", "score"], properties: { ...common, value, score: value } };
   }
-  return { type: "object", required: ["type", "noul"], properties: { ...common, noul: { type: "number", minimum: 0, maximum: 1 } } };
+  const value = { type: "number", minimum: 0, maximum: 1 };
+  return { type: "object", required: ["type", "value", "noul"], properties: { ...common, value, noul: value } };
 }
 async function createCapability(req, res) {
   const body = objectBody(await readJson(req)); const activate = body.activate !== false; const capability = validateCapability(body);
@@ -417,7 +420,16 @@ async function executeCapability(id, version, body) {
   const response = await invokeInstanceBody(selected.id, "system_one", { state: { body: text.trim() }, questions: capability.questions });
   const run = { id: newId("run"), capability_id: capability.id, capability_version: capability.version, instance_id: selected.id, input: { [field]: text.trim() }, ...(metadata ? { metadata } : {}), response, created_at: new Date().toISOString() };
   await updateState((next) => { next.runs[run.id] = run; });
-  return { request_id: run.id, capability: { id: capability.id, version: capability.version }, output: response.answers || response, raw: response, model: selected.model, ...(metadata ? { metadata } : {}), run_id: run.id };
+  return { request_id: run.id, capability: { id: capability.id, version: capability.version }, output: normalizeAnswers(response.answers || response), raw: response, model: selected.model, ...(metadata ? { metadata } : {}), run_id: run.id };
+}
+
+function normalizeAnswers(answers) {
+  if (!answers || typeof answers !== "object" || Array.isArray(answers)) return answers;
+  return Object.fromEntries(Object.entries(answers).map(([id, answer]) => {
+    if (!answer || typeof answer !== "object") return [id, answer];
+    const value = answer.type === "choice" ? answer.choice : answer.type === "score" ? answer.score : answer.noul;
+    return [id, { ...answer, value }];
+  }));
 }
 
 function matchingCapabilityInstances(state, capability) {
