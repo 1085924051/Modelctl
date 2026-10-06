@@ -1,7 +1,7 @@
 export class ModelctlError extends Error {}
 
 export class Modelctl {
-  constructor(baseUrl = "http://127.0.0.1:11435", token = process.env.MODELCTL_API_TOKEN) {
+  constructor(baseUrl = "http://127.0.0.1:11435", token = process.env.MODELCTL_API_INVOKE_TOKEN || process.env.MODELCTL_API_TOKEN) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.token = token;
   }

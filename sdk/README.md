@@ -36,8 +36,9 @@ const readiness = await client.status("refund-check", "1.0.0");
 console.log(readiness.ready, readiness.next_action);
 ```
 
-For enterprise server mode, pass the API token to the constructor or set
-`MODELCTL_API_TOKEN`.
+For enterprise server mode, pass the API token to the constructor. If omitted,
+the SDK uses `MODELCTL_API_INVOKE_TOKEN` first and falls back to
+`MODELCTL_API_TOKEN` for backward compatibility.
 
 Batch jobs return a task identifier. The SDKs include a polling helper so a
 queue worker can wait for completion without implementing the task protocol:

@@ -16,7 +16,11 @@ class ModelctlError(RuntimeError):
 class Modelctl:
     def __init__(self, base_url: str = "http://127.0.0.1:11435", token: str | None = None):
         self.base_url = base_url.rstrip("/")
-        self.token = os.environ.get("MODELCTL_API_TOKEN") if token is None else token
+        self.token = (
+            os.environ.get("MODELCTL_API_INVOKE_TOKEN") or os.environ.get("MODELCTL_API_TOKEN")
+            if token is None
+            else token
+        )
 
     def invoke(self, capability_id: str, input: dict, metadata: dict | None = None, version: str | None = None) -> dict:
         body = {"input": input}
