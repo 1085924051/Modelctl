@@ -209,6 +209,12 @@ type CapabilityBatchResponse struct {
 	Poll   string `json:"poll"`
 }
 
+type CapabilitySchema struct {
+	Capability    map[string]any `json:"capability"`
+	RequestSchema map[string]any `json:"request_schema"`
+	ResponseSchema map[string]any `json:"response_schema"`
+}
+
 type CapabilityInvokeResponse struct {
 	RequestID string         `json:"request_id"`
 	Capability map[string]any `json:"capability"`
@@ -325,6 +331,12 @@ func (c *Client) InvokeCapability(id string, request CapabilityInvokeRequest) (C
 func (c *Client) CreateCapabilityBatch(id string, items []CapabilityInvokeRequest) (CapabilityBatchResponse, error) {
 	var result CapabilityBatchResponse
 	err := c.do(http.MethodPost, "/v1/capabilities/"+url.PathEscape(id)+"/batch", map[string]any{"items": items}, &result)
+	return result, err
+}
+
+func (c *Client) CapabilitySchema(id string) (CapabilitySchema, error) {
+	var result CapabilitySchema
+	err := c.do(http.MethodGet, "/v1/capabilities/"+url.PathEscape(id)+"/schema", nil, &result)
 	return result, err
 }
 

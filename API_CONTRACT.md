@@ -347,3 +347,9 @@ Starts a sequential batch task with 1 to 1000 items. Each item uses the same
 returned task id through `GET /v1/tasks/{task_id}`. Successful items create run
 records; failed items are recorded with their index and structured error while
 the rest of the batch continues.
+
+### `GET /v1/capabilities/{id}/schema`
+
+Returns machine-readable request and response schemas for SDK generation and
+contract tests. The schema is derived from the published capability input field
+and remains tied to its capability version.

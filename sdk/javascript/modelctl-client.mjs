@@ -17,6 +17,10 @@ export class Modelctl {
     return (await this.request("/v1/capabilities")).items || [];
   }
 
+  async schema(capabilityId) {
+    return this.request(`/v1/capabilities/${encodeURIComponent(capabilityId)}/schema`);
+  }
+
   async runs() {
     return (await this.request("/v1/runs")).items || [];
   }

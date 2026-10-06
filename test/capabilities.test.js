@@ -59,6 +59,9 @@ test("capabilities can be published and listed", async () => {
   const listed = await request("/v1/capabilities");
   assert.equal(listed.status, 200);
   assert.deepEqual(listed.body.items.map((item) => item.id), ["refund-check"]);
+  const schema = await request("/v1/capabilities/refund-check/schema");
+  assert.equal(schema.status, 200);
+  assert.deepEqual(schema.body.request_schema.properties.input.required, ["text"]);
 });
 
 test("run history is available as a replayable collection", async () => {

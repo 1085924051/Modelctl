@@ -24,6 +24,9 @@ class Modelctl:
     def capabilities(self) -> list[dict]:
         return self._request("GET", "/v1/capabilities").get("items", [])
 
+    def schema(self, capability_id: str) -> dict:
+        return self._request("GET", f"/v1/capabilities/{capability_id}/schema")
+
     def runs(self) -> list[dict]:
         return self._request("GET", "/v1/runs").get("items", [])
 

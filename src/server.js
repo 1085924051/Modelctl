@@ -49,6 +49,8 @@ async function route(req, res, rid, baseUrl) {
   if (req.method === "POST" && pathname === "/v1/capabilities") return createCapability(req, res);
   const capabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)$/);
   if (req.method === "GET" && capabilityMatch) return getCapability(capabilityMatch[1], res);
+  const capabilitySchemaMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/schema$/);
+  if (req.method === "GET" && capabilitySchemaMatch) return getCapabilitySchema(capabilitySchemaMatch[1], res);
   const invokeCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/invoke$/);
   if (req.method === "POST" && invokeCapabilityMatch) return invokeCapability(invokeCapabilityMatch[1], req, res);
   const batchCapabilityMatch = pathname.match(/^\/v1\/capabilities\/([^/]+)\/batch$/);
@@ -342,6 +344,15 @@ function validateCapability(body) {
 
 async function listCapabilities(res) { const state = await readState(); return jsonResponse(res, 200, { items: Object.values(state.capabilities || {}).sort((a, b) => a.id.localeCompare(b.id)) }); }
 async function getCapability(id, res) { const state = await readState(); const item = state.capabilities[id]; if (!item) throw apiError(404, "CAPABILITY_NOT_FOUND", "capability not found"); return jsonResponse(res, 200, item); }
+async function getCapabilitySchema(id, res) {
+  const state = await readState(); const capability = state.capabilities[id]; if (!capability) throw apiError(404, "CAPABILITY_NOT_FOUND", "capability not found");
+  const field = capability.input?.field || "text";
+  return jsonResponse(res, 200, {
+    capability: { id: capability.id, version: capability.version, name: capability.name },
+    request_schema: { type: "object", required: ["input"], properties: { input: { type: "object", required: [field], properties: { [field]: { type: "string" } } }, metadata: { type: "object" } } },
+    response_schema: { type: "object", required: ["output", "run_id"], properties: { output: { type: "object" }, raw: { type: "object" }, model: { type: "object" }, run_id: { type: "string" } } },
+  });
+}
 async function createCapability(req, res) { const capability = validateCapability(await readJson(req)); await updateState((state) => { state.capabilities[capability.id] = capability; }); return jsonResponse(res, 201, capability); }
 
 async function invokeCapability(id, req, res) {
