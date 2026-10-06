@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -158,6 +159,52 @@ func (d *Desktop) renderCapabilities() {
 		container.NewHBox(create, status),
 	))
 	box.Add(form)
+
+	importPath := widget.NewEntry()
+	importPath.SetPlaceHolder("Path to a .capability.json file")
+	importStatus := widget.NewLabel("")
+	importButton := widget.NewButton("Import capability JSON", func() {
+		path := strings.TrimSpace(importPath.Text)
+		if path == "" {
+			importStatus.SetText("Choose or enter a capability JSON file path.")
+			return
+		}
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			importStatus.SetText(err.Error())
+			return
+		}
+		var imported api.Capability
+		if err := json.Unmarshal(payload, &imported); err != nil {
+			importStatus.SetText("Invalid capability JSON: " + err.Error())
+			return
+		}
+		if strings.TrimSpace(imported.ID) == "" || strings.TrimSpace(imported.Version) == "" || imported.Model.ModelID == "" || imported.Model.Variant == "" {
+			importStatus.SetText("Capability JSON needs id, version, model.model_id, and model.variant.")
+			return
+		}
+		activate := false
+		imported.Activate = &activate
+		importButton.Disable()
+		importStatus.SetText("Publishing imported capability…")
+		go func() {
+			created, createErr := d.client.CreateCapability(imported)
+			fyne.Do(func() {
+				importButton.Enable()
+				if createErr != nil {
+					importStatus.SetText(createErr.Error())
+					return
+				}
+				importStatus.SetText("Imported " + created.ID + " v" + created.Version + ". Activate it after testing.")
+				d.refresh()
+			})
+		}()
+	})
+	box.Add(widget.NewCard("Import a capability", "Move a reviewed capability definition between machines or environments", container.NewVBox(
+		widget.NewLabel("Exported capability JSON is portable and contains no model files or secrets."),
+		importPath,
+		container.NewHBox(importButton, importStatus),
+	)))
 
 	if len(d.capabilities) == 0 {
 		box.Add(widget.NewLabel("No capabilities published yet. Create one above, then copy the generated API example."))
