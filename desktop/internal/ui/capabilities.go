@@ -163,7 +163,8 @@ func (d *Desktop) renderCapabilities() {
 	importPath := widget.NewEntry()
 	importPath.SetPlaceHolder("Path to a .capability.json file")
 	importStatus := widget.NewLabel("")
-	importButton := widget.NewButton("Import capability JSON", func() {
+	var importButton *widget.Button
+	importButton = widget.NewButton("Import capability JSON", func() {
 		path := strings.TrimSpace(importPath.Text)
 		if path == "" {
 			importStatus.SetText("Choose or enter a capability JSON file path.")
