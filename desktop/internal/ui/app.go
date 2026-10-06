@@ -201,8 +201,8 @@ func (d *Desktop) modelCard(index int) fyne.CanvasObject {
 	progress := widget.NewLabel("")
 	var pull *widget.Button
 	var run *widget.Button
-	pull = widget.NewButton("Pull", func() { d.pull(model, progress, stateLabel, pull, run) })
-	run = widget.NewButton("Run", func() { d.run(model, progress, stateLabel, pull, run) })
+	pull = widget.NewButton("Download model", func() { d.pull(model, progress, stateLabel, pull, run) })
+	run = widget.NewButton("Load & run", func() { d.run(model, progress, stateLabel, pull, run) })
 	content := container.NewVBox(
 		widget.NewLabel(fmt.Sprintf("%s · v%s", model.summary.ID, model.summary.Version)),
 		stateLabel,
@@ -219,9 +219,9 @@ func (d *Desktop) modelCard(index int) fyne.CanvasObject {
 
 func modelStateText(model api.ModelSummary, variant string) string {
 	if installedVariant(model, variant) {
-		return "Installed · ready to run"
+		return "Downloaded · ready to load"
 	}
-	return "Not installed · Pull downloads the verified checkpoint"
+	return "Not downloaded · Download verifies the checkpoint"
 }
 
 func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label, pull, run *widget.Button) {
@@ -245,7 +245,7 @@ func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label, pu
 				progress.SetText(fmt.Sprintf("Downloading %d%%", progressPercent(task.Progress.BytesDone, task.Progress.BytesTotal)))
 			})
 			if task.Status == "succeeded" {
-				fyne.Do(func() { stateLabel.SetText("Installed · ready to run"); progress.SetText("Downloaded") })
+				fyne.Do(func() { stateLabel.SetText("Downloaded · ready to load"); progress.SetText("Download verified") })
 				d.refresh()
 				return
 			}

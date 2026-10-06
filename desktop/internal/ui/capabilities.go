@@ -82,9 +82,31 @@ func (d *Desktop) renderCapabilities() {
 		box.Add(widget.NewLabelWithStyle("Published capabilities", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 		for _, capability := range d.capabilities {
 			capability := capability
+			testInput := widget.NewMultiLineEntry()
+			testInput.SetText("The customer was charged twice and wants a refund.")
+			testInput.SetMinRowsVisible(3)
+			testStatus := widget.NewLabel("")
+			var testButton *widget.Button
+			testButton = widget.NewButton("Test capability", func() {
+				testButton.Disable()
+				testStatus.SetText("Running…")
+				go func() {
+					result, err := d.client.InvokeCapability(capability.ID, api.CapabilityInvokeRequest{Input: map[string]any{"text": strings.TrimSpace(testInput.Text)}})
+					fyne.Do(func() {
+						testButton.Enable()
+						if err != nil { testStatus.SetText(err.Error()); return }
+						payload, _ := json.MarshalIndent(result.Output, "", "  ")
+						testStatus.SetText(string(payload))
+					})
+				}()
+			})
 			box.Add(widget.NewCard(capability.Name, capability.ID+" v"+capability.Version, container.NewVBox(
 				widget.NewLabel(capability.Description),
 				widget.NewLabel(fmt.Sprintf("Model: %s · %s · %s", capability.Model.ModelID, capability.Model.Variant, capability.Model.Profile)),
+				widget.NewLabel("Test input"),
+				testInput,
+				container.NewHBox(testButton, testStatus),
+				widget.NewLabel("Integration example"),
 				widget.NewLabel(capabilitySnippet(d.client.BaseURL(), capability.ID)),
 			)))
 		}
@@ -109,5 +131,6 @@ func buildCapabilityQuestion(id, kind, instructions, criteria string) (map[strin
 
 func capabilitySnippet(baseURL, id string) string {
 	payload, _ := json.Marshal(map[string]any{"input": map[string]string{"text": "your text here"}})
-	return fmt.Sprintf("POST %s/v1/capabilities/%s/invoke  %s", baseURL, id, string(payload))
+	endpoint := fmt.Sprintf("%s/v1/capabilities/%s/invoke", baseURL, id)
+	return fmt.Sprintf("POST %s\nContent-Type: application/json\n\n%s\n\nPython: requests.post(%q, json=%s)", endpoint, string(payload), endpoint, string(payload))
 }

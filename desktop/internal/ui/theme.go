@@ -10,8 +10,15 @@ import (
 type modelTheme struct{ fyne.Theme }
 
 func (t modelTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	if name == theme.ColorNamePrimary {
-		return color.NRGBA{R: 38, G: 96, B: 72, A: 255}
+	switch name {
+	case theme.ColorNamePrimary:
+		return color.NRGBA{R: 35, G: 112, B: 82, A: 255}
+	case theme.ColorNameBackground:
+		return color.NRGBA{R: 247, G: 249, B: 250, A: 255}
+	case theme.ColorNameButton:
+		return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+	case theme.ColorNameHover:
+		return color.NRGBA{R: 230, G: 243, B: 237, A: 255}
 	}
 	return t.Theme.Color(name, variant)
 }
