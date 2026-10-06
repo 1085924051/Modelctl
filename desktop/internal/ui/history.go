@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/1085924051/modelctl/desktop/internal/api"
 )
 
 func (d *Desktop) renderHistory() {
@@ -20,13 +21,29 @@ func (d *Desktop) renderHistory() {
 		for _, run := range d.runs {
 			run := run
 			raw, _ := json.MarshalIndent(run.Response, "", "  ")
+			status := widget.NewLabel("")
+			rerun := widget.NewButton("Run again", nil)
+			rerun.OnTapped = func() {
+				rerun.Disable()
+				status.SetText("Running...")
+				go func() {
+					result, err := d.client.InvokeCapability(run.CapabilityID, api.CapabilityInvokeRequest{Input: run.Input}, run.CapabilityVersion)
+					fyne.Do(func() {
+						rerun.Enable()
+						if err != nil { status.SetText(err.Error()); return }
+						status.SetText("Replayed as " + result.RunID)
+						d.refresh()
+					})
+				}()
+			}
 			box.Add(widget.NewCard(
 				run.CapabilityID+" · "+run.CapabilityVersion,
 				run.CreatedAt,
 				container.NewVBox(
-					widget.NewLabel(fmt.Sprintf("Run %s · instance %s", run.ID, run.InstanceID)),
-					widget.NewLabel("Input: "+runInputText(run.Input)),
-					widget.NewAccordion(widget.NewAccordionItem("Raw result", widget.NewLabel(string(raw)))),
+				widget.NewLabel(fmt.Sprintf("Run %s · instance %s", run.ID, run.InstanceID)),
+				widget.NewLabel("Input: "+runInputText(run.Input)),
+				container.NewHBox(rerun, status),
+				widget.NewAccordion(widget.NewAccordionItem("Raw result", widget.NewLabel(string(raw)))),
 				),
 			))
 		}
