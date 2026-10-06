@@ -169,7 +169,7 @@ type capabilityQuestionEditor struct {
 	id           *widget.Entry
 	kind         *widget.Select
 	instructions *widget.Entry
-	criteria     *widget.MultiLineEntry
+	criteria     *widget.Entry
 	view         fyne.CanvasObject
 }
 

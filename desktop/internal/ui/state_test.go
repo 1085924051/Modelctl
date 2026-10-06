@@ -75,7 +75,7 @@ func TestReadyInstancesIgnoresHistory(t *testing.T) {
 
 func TestModelStateTextTracksSelectedVariant(t *testing.T) {
 	model := api.ModelSummary{InstalledVariants: []string{"english"}}
-	if got := modelStateText(model, "multilingual"); !strings.HasPrefix(got, "Not installed") {
+	if got := modelStateText(model, "multilingual"); !strings.HasPrefix(got, "Not downloaded") {
 		t.Fatalf("modelStateText = %q", got)
 	}
 }
