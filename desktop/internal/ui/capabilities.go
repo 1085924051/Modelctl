@@ -351,6 +351,39 @@ func (d *Desktop) renderCapabilities() {
 				}()
 			})
 			readinessStatus := widget.NewLabel("Readiness not checked")
+			downloadButton := widget.NewButton("Download model", nil)
+			downloadButton.Hide()
+			downloadButton.OnTapped = func() {
+				var selected *modelState
+				for index := range d.models {
+					candidate := &d.models[index]
+					if candidate.summary.ID == capability.Model.ModelID {
+						selected = candidate
+						break
+					}
+				}
+				if selected == nil {
+					readinessStatus.SetText("Model is not in the local catalog. Refresh Models first.")
+					return
+				}
+				downloadButton.Disable()
+				readinessStatus.SetText("Downloading model…")
+				go func(summary api.ModelSummary, variant string) {
+					err := d.pullAndWait(summary, variant, func(progress string) {
+						fyne.Do(func() { readinessStatus.SetText(progress) })
+					})
+					fyne.Do(func() {
+						downloadButton.Enable()
+						if err != nil {
+							readinessStatus.SetText(err.Error())
+							return
+						}
+						downloadButton.Hide()
+						readinessStatus.SetText("Model downloaded. Check readiness again or run a test.")
+						d.refresh()
+					})
+				}(selected.summary, capability.Model.Variant)
+			}
 			var readinessButton *widget.Button
 			readinessButton = widget.NewButton("Check deployment readiness", func() {
 				readinessButton.Disable()
@@ -366,9 +399,11 @@ func (d *Desktop) renderCapabilities() {
 						state, _ := result["status"].(string)
 						next, _ := result["next_action"].(string)
 						if state == "model_not_installed" {
+							downloadButton.Show()
 							readinessStatus.SetText(fmt.Sprintf("Model %s is not installed. Open Models to download %s.", capability.Model.ModelID, capability.Model.Variant))
 							return
 						}
+						downloadButton.Hide()
 						readinessStatus.SetText("Status: " + state + " · next: " + next)
 					})
 				}()
@@ -376,7 +411,7 @@ func (d *Desktop) renderCapabilities() {
 			box.Add(widget.NewCard(capability.Name, capability.ID+" v"+capability.Version, container.NewVBox(
 				widget.NewLabel(capability.Description),
 				widget.NewLabel(fmt.Sprintf("Model: %s · %s · %s", capability.Model.ModelID, capability.Model.Variant, capability.Model.Profile)),
-				container.NewHBox(widget.NewButton("Open Integration", func() { d.showPage("integration") }), readinessButton, readinessStatus),
+				container.NewHBox(widget.NewButton("Open Integration", func() { d.showPage("integration") }), readinessButton, downloadButton, readinessStatus),
 				copyDefinition,
 				versionStatus,
 				versionButtons,
