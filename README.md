@@ -146,8 +146,10 @@ Local administration endpoints include `GET/PUT /v1/settings`,
 [API_CONTRACT.md](API_CONTRACT.md) for request and response shapes.
 
 For MCP clients, configure the stdio command `modelctl-mcp` (or
-`node bin/modelctl-mcp.js`). It exposes the `laya_system_one` tool and proxies
-calls to the daemon. The example Skill contract is in
+`node bin/modelctl-mcp.js`). It keeps the raw `laya_system_one` tool for
+advanced users and exposes every published capability as a typed
+`modelctl_capability_<id>` tool. Set `MODELCTL_URL` and, for a remote daemon,
+`MODELCTL_API_TOKEN` in the MCP process environment. The example Skill contract is in
 `skills/laya-system-one/SKILL.md`.
 
 ## Development

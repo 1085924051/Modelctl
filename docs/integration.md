@@ -110,7 +110,9 @@ administrator activates another version while the batch is running.
 
 - REST: browser, Python, Java, Go, and internal services.
 - CLI: scripts, local automation, CI tasks, and capability contract checks (`modelctl capabilities schema ...`).
-- MCP: AI agents and desktop developer tools.
+- MCP: AI agents and desktop developer tools. Published capabilities are
+  discovered as typed `modelctl_capability_<id>` tools; the raw
+  `laya_system_one` tool remains available for adapter-level debugging.
 
 The desktop console is the administration and test surface for all three modes.
 
