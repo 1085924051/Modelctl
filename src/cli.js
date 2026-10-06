@@ -111,9 +111,11 @@ async function post(url, body) { const r = await fetch(url, { method: "POST", he
 async function del(url) { const r = await fetch(url, { method: "DELETE", headers: apiHeaders() }); return parse(r); }
 async function readJsonFile(file) { return JSON.parse(await (await import("node:fs/promises")).readFile(file, "utf8")); }
 async function waitTask(base, taskID) {
+  const deadline = Date.now() + 60 * 60 * 1000;
   while (true) {
     const task = await get(`${base}/v1/tasks/${encodeURIComponent(taskID)}`);
     if (["succeeded", "failed", "cancelled"].includes(task.status)) return task;
+    if (Date.now() >= deadline) throw new Error(`task ${taskID} did not finish before timeout`);
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
