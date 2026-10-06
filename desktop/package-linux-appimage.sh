@@ -13,6 +13,7 @@ APPDIR="$STAGE/Modelctl.AppDir"
 command -v "$APPIMAGE_TOOL" >/dev/null 2>&1 || { echo "appimagetool is required" >&2; exit 2; }
 [ -f "$SOURCE_TAR" ] || { echo "Linux Fyne package is missing: $SOURCE_TAR" >&2; exit 2; }
 [ -f "$RUNTIME/runtime-manifest.json" ] || { echo "Linux runtime is missing: $RUNTIME" >&2; exit 2; }
+"$ROOT/runtime/assert-layout.sh" "$RUNTIME" linux-amd64
 
 rm -rf "$STAGE"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/modelctl" "$APPDIR/usr/share/icons/hicolor/256x256/apps"

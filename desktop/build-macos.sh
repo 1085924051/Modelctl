@@ -15,6 +15,7 @@ if [ ! -f "$RUNTIME_ROOT/runtime-manifest.json" ]; then
   echo "A verified macOS runtime is required at $RUNTIME_ROOT" >&2
   exit 2
 fi
+"$ROOT/runtime/assert-layout.sh" "$RUNTIME_ROOT" darwin-arm64
 if [ ! -f "$ROOT/Icon.png" ]; then (cd "$ROOT" && go run ./tools/generate_icon.go); fi
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

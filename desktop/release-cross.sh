@@ -48,6 +48,7 @@ for target in windows-amd64 linux-amd64; do
     echo "A verified $target runtime is required at $DIST/runtime/$target" >&2
     exit 2
   fi
+  "$ROOT/runtime/assert-layout.sh" "$DIST/runtime/$target" "$target"
 done
 
 WINDOWS_STAGE="$STAGE/Modelctl-Windows-x64"

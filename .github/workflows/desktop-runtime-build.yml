@@ -46,6 +46,7 @@ jobs:
           node --check sdk/javascript/modelctl-client.mjs
           python -m py_compile sdk/python/modelctl_client.py
           npm test
+          node --test desktop/runtime/tests/*.test.mjs
       - name: Test desktop client
         working-directory: desktop
         run: go test -tags ci ./...
