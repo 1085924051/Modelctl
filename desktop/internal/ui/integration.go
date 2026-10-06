@@ -107,13 +107,21 @@ func populateIntegrationDetail(d *Desktop, detail *fyne.Container, integration a
 	capabilityVersion, _ := integration.Capability["version"].(string)
 	authRequired, _ := integration.Auth["required"].(bool)
 	authText := "No token required in local loopback mode"
+	tokenEnvironmentVariable := ""
 	if authRequired {
-		tokenEnvironmentVariable, _ := integration.Auth["environment_variable"].(string)
+		tokenEnvironmentVariable, _ = integration.Auth["environment_variable"].(string)
 		if tokenEnvironmentVariable == "" {
 			tokenEnvironmentVariable = "MODELCTL_API_TOKEN"
 		}
 		authText = "Bearer token required · use " + tokenEnvironmentVariable + " in the business service secret store"
 	}
+	connectionTemplate := "MODELCTL_URL=" + integration.BaseURL + "\n"
+	if authRequired {
+		connectionTemplate += tokenEnvironmentVariable + "=replace-with-secret-manager-value\n"
+	}
+	copyConnection := widget.NewButton("Copy connection config", func() {
+		d.app.Clipboard().SetContent(connectionTemplate)
+	})
 	readinessStatus := widget.NewLabel("Readiness not checked")
 	var readinessButton *widget.Button
 	readinessButton = widget.NewButton("Check readiness", func() {
@@ -161,6 +169,8 @@ func populateIntegrationDetail(d *Desktop, detail *fyne.Container, integration a
 		copyableText(d, integration.Endpoint),
 		widget.NewLabel(authText),
 		widget.NewLabel("The endpoint is versioned. Modelctl starts the matching local runtime automatically after the model is installed."),
+		widget.NewLabel("The copied template contains no real secret."),
+		copyConnection,
 		container.NewHBox(readinessButton, readinessStatus),
 		container.NewHBox(openAPIButton, openAPIStatus),
 	)))
