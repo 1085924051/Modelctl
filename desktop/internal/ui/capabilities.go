@@ -105,7 +105,7 @@ func (d *Desktop) renderCapabilities() {
 		widget.NewLabel("Version"), version,
 		widget.NewLabel("Display name"), name,
 		widget.NewLabel("Description"), description,
-		widget.NewLabel("Input fields (id:type:description, one per line)"), inputFields,
+		widget.NewLabel("Input fields (id:type:description; add ? after id for optional)"), inputFields,
 		widget.NewLabel("Input template (use {{field}} placeholders)"), inputTemplate,
 		widget.NewLabel("Model"), modelSelect,
 		container.NewBorder(nil, nil, widget.NewLabel("Questions"), widget.NewButton("Add question", addQuestion)),
@@ -339,6 +339,11 @@ func buildCapabilityInput(definitionText, template string) (map[string]any, erro
 			return nil, fmt.Errorf("input fields must use id:type:description")
 		}
 		id, kind := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		required := true
+		if strings.HasSuffix(id, "?") {
+			required = false
+			id = strings.TrimSpace(strings.TrimSuffix(id, "?"))
+		}
 		description := ""
 		if len(parts) == 3 {
 			description = strings.TrimSpace(parts[2])
@@ -346,7 +351,10 @@ func buildCapabilityInput(definitionText, template string) (map[string]any, erro
 		if id == "" || kind == "" || !contains([]string{"string", "number", "boolean"}, kind) {
 			return nil, fmt.Errorf("input field %q needs type string, number, or boolean", id)
 		}
-		definition := map[string]any{"type": kind, "required": true}
+		if _, exists := fields[id]; exists {
+			return nil, fmt.Errorf("duplicate input field %q", id)
+		}
+		definition := map[string]any{"type": kind, "required": required}
 		if description != "" {
 			definition["description"] = description
 		}

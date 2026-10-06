@@ -174,12 +174,12 @@ func TestCapabilitySnippetPinsVersionAndMetadata(t *testing.T) {
 }
 
 func TestBuildCapabilityInputParsesHumanFriendlyFields(t *testing.T) {
-	input, err := buildCapabilityInput("text:string:Customer message\norder_id:string:Order number", "Message: {{text}}\\nOrder: {{order_id}}")
+	input, err := buildCapabilityInput("text:string:Customer message\norder_id?:string:Order number", "Message: {{text}}\\nOrder: {{order_id}}")
 	if err != nil {
 		t.Fatal(err)
 	}
 	fields := input["fields"].(map[string]any)
-	if len(fields) != 2 || fields["order_id"].(map[string]any)["type"] != "string" {
+	if len(fields) != 2 || fields["order_id"].(map[string]any)["type"] != "string" || fields["order_id"].(map[string]any)["required"] != false {
 		t.Fatalf("parsed input fields = %#v", fields)
 	}
 }
