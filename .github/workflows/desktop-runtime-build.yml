@@ -28,6 +28,8 @@ jobs:
         with:
           go-version-file: desktop/go.mod
           cache-dependency-path: desktop/go.sum
+      - name: Install Fyne build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
       - name: Validate Node sources and tests
         run: |
           node --check src/core.js
@@ -36,6 +38,9 @@ jobs:
       - name: Test desktop client
         working-directory: desktop
         run: go test ./...
+      - name: Vet desktop client
+        working-directory: desktop
+        run: go vet ./...
 
   runtime:
     strategy:
