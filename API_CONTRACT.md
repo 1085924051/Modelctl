@@ -356,7 +356,8 @@ the rest of the batch continues.
 
 Returns machine-readable request and response schemas for SDK generation and
 contract tests. The schema is derived from the published capability input field
-and remains tied to its capability version.
+and questions, including `noul`, `choice` and `score` output fields, and remains
+tied to its capability version.
 
 Capabilities are versioned. Publish a new version with `activate: false` to keep
 it available without changing the active contract. Select an explicit version by

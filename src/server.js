@@ -366,11 +366,24 @@ async function getCapability(id, version, res) { const state = await readState()
 async function getCapabilitySchema(id, version, res) {
   const state = await readState(); const capability = resolveCapability(state, id, version);
   const field = capability.input?.field || "text";
+  const outputProperties = Object.fromEntries(Object.entries(capability.questions || {}).map(([questionID, question]) => [questionID, answerSchema(question)]));
   return jsonResponse(res, 200, {
     capability: { id: capability.id, version: capability.version, name: capability.name },
     request_schema: { type: "object", required: ["input"], properties: { input: { type: "object", required: [field], properties: { [field]: { type: "string" } } }, metadata: { type: "object" } } },
-    response_schema: { type: "object", required: ["output", "run_id"], properties: { output: { type: "object" }, raw: { type: "object" }, model: { type: "object" }, run_id: { type: "string" } } },
+    response_schema: { type: "object", required: ["output", "run_id"], properties: { output: { type: "object", required: Object.keys(outputProperties), properties: outputProperties }, raw: { type: "object" }, model: { type: "object" }, metadata: { type: "object" }, run_id: { type: "string" } } },
   });
+}
+
+function answerSchema(question) {
+  const common = { type: { type: "string", enum: [question.type] }, confidence: { type: "number" }, probabilities: { type: "object" } };
+  if (question.type === "choice") {
+    const labels = Array.isArray(question.criteria) ? question.criteria : Object.keys(question.criteria || {});
+    return { type: "object", required: ["type", "choice"], properties: { ...common, choice: { type: "string", ...(labels.length ? { enum: labels } : {}) } } };
+  }
+  if (question.type === "score") {
+    return { type: "object", required: ["type", "score"], properties: { ...common, score: { type: ["number", "string", "object", "array", "null"] } } };
+  }
+  return { type: "object", required: ["type", "noul"], properties: { ...common, noul: { type: "number", minimum: 0, maximum: 1 } } };
 }
 async function createCapability(req, res) {
   const body = objectBody(await readJson(req)); const activate = body.activate !== false; const capability = validateCapability(body);
