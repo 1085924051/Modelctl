@@ -249,6 +249,13 @@ func TestCapabilityDefinitionJSONIsPortableForPublish(t *testing.T) {
 	if _, ok := payload["active"]; ok {
 		t.Fatal("runtime state leaked into portable definition")
 	}
+	var imported api.Capability
+	if err := json.Unmarshal([]byte(definition), &imported); err != nil {
+		t.Fatal(err)
+	}
+	if imported.ID != "refund-check" || imported.Version != "1.2.0" || imported.Model.ModelID == "" || imported.Model.Variant == "" {
+		t.Fatalf("portable definition cannot be imported: %#v", imported)
+	}
 }
 
 func TestBuildCapabilityInputParsesHumanFriendlyFields(t *testing.T) {
