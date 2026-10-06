@@ -13,3 +13,8 @@ The model variant must be downloaded first. After that, the first capability
 call starts the matching runtime automatically. `metadata` is returned with the
 invocation and stored with its run record, so the caller can associate results
 with tickets, tenants, documents, or other business records.
+
+The capability in this example accepts a customer message and an optional
+`order_id`. Modelctl renders those fields through the capability template before
+calling Laya, so callers never need to construct the raw `state/questions`
+payload.

@@ -2,7 +2,8 @@
   "items": [
     {
       "input": {
-        "text": "The customer was charged twice and wants a refund."
+        "text": "The customer was charged twice and wants a refund.",
+        "order_id": "O-100"
       },
       "metadata": {
         "ticket_id": "T-100"
@@ -10,7 +11,8 @@
     },
     {
       "input": {
-        "text": "The user cannot log in to the dashboard."
+        "text": "The user cannot log in to the dashboard.",
+        "order_id": "O-101"
       },
       "metadata": {
         "ticket_id": "T-101"

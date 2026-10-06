@@ -45,6 +45,23 @@ GET /v1/capabilities/refund-check/schema?version=1.0.0
 
 schema 会说明输入字段、必填项、输出字段、`choice` 枚举、`noul` 范围和 `score` 结构。前端表单、后端校验和接口测试都可以由这个 schema 生成。
 
+能力可以声明多个业务输入字段，并通过模板转换为模型可读文本。例如：
+
+```json
+{
+  "input": {
+    "type": "object",
+    "fields": {
+      "text": { "type": "string", "required": true },
+      "order_id": { "type": "string", "required": false }
+    },
+    "template": "Customer message: {{text}}\nOrder: {{order_id}}"
+  }
+}
+```
+
+业务系统传入结构化字段即可，Modelctl 会负责渲染模板并生成 Laya/Jev 所需的内部输入。旧版单字段 `{ "type": "text", "field": "text" }` 仍然兼容。
+
 ### 2. 同步调用
 
 订单、工单或用户请求需要立即得到判断时，业务服务调用：

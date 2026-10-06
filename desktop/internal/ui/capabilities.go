@@ -29,6 +29,12 @@ func (d *Desktop) renderCapabilities() {
 	name.SetPlaceHolder("Refund request check")
 	description := widget.NewMultiLineEntry()
 	description.SetPlaceHolder("Decide whether a customer is explicitly asking for a refund.")
+	inputFields := widget.NewMultiLineEntry()
+	inputFields.SetText("text:string:Customer message")
+	inputFields.SetMinRowsVisible(2)
+	inputTemplate := widget.NewMultiLineEntry()
+	inputTemplate.SetText("Customer message: {{text}}")
+	inputTemplate.SetMinRowsVisible(2)
 	modelOptions := make([]string, 0, len(d.models))
 	modelByLabel := make(map[string]modelState)
 	for _, model := range d.models {
@@ -63,11 +69,16 @@ func (d *Desktop) renderCapabilities() {
 			status.SetText(err.Error())
 			return
 		}
+		input, err := buildCapabilityInput(inputFields.Text, inputTemplate.Text)
+		if err != nil {
+			status.SetText(err.Error())
+			return
+		}
 		capability := api.Capability{
 			ID: strings.TrimSpace(id.Text), Name: strings.TrimSpace(name.Text), Description: strings.TrimSpace(description.Text),
 			Version: strings.TrimSpace(version.Text), SchemaVersion: 1,
 			Model: api.CapabilityModel{ModelID: selected.summary.ID, Version: selected.summary.Version, Variant: selected.variant, Profile: selected.profile},
-			Input: map[string]any{"type": "text", "field": "text"}, Questions: questions,
+			Input: input, Questions: questions,
 		}
 		activateValue := activate.Checked
 		capability.Activate = &activateValue
@@ -94,6 +105,8 @@ func (d *Desktop) renderCapabilities() {
 		widget.NewLabel("Version"), version,
 		widget.NewLabel("Display name"), name,
 		widget.NewLabel("Description"), description,
+		widget.NewLabel("Input fields (id:type:description, one per line)"), inputFields,
+		widget.NewLabel("Input template (use {{field}} placeholders)"), inputTemplate,
 		widget.NewLabel("Model"), modelSelect,
 		container.NewBorder(nil, nil, widget.NewLabel("Questions"), widget.NewButton("Add question", addQuestion)),
 		questionList,
@@ -108,7 +121,7 @@ func (d *Desktop) renderCapabilities() {
 		box.Add(widget.NewLabelWithStyle("Published capabilities", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 		for _, capability := range d.capabilities {
 			capability := capability
-			snippet := capabilitySnippet(d.client.BaseURL(), capability.ID, capability.Version, d.client.HasToken())
+			snippet := capabilitySnippet(d.client.BaseURL(), capability.ID, capability.Version, capability.Input, d.client.HasToken())
 			integration := widget.NewMultiLineEntry()
 			integration.SetText(snippet)
 			integration.SetMinRowsVisible(11)
@@ -314,6 +327,41 @@ func buildCapabilityQuestions(rows []*capabilityQuestionEditor) (map[string]api.
 	return questions, nil
 }
 
+func buildCapabilityInput(definitionText, template string) (map[string]any, error) {
+	fields := map[string]any{}
+	for _, line := range strings.Split(definitionText, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 3)
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("input fields must use id:type:description")
+		}
+		id, kind := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		description := ""
+		if len(parts) == 3 {
+			description = strings.TrimSpace(parts[2])
+		}
+		if id == "" || kind == "" || !contains([]string{"string", "number", "boolean"}, kind) {
+			return nil, fmt.Errorf("input field %q needs type string, number, or boolean", id)
+		}
+		definition := map[string]any{"type": kind, "required": true}
+		if description != "" {
+			definition["description"] = description
+		}
+		fields[id] = definition
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("add at least one input field")
+	}
+	template = strings.TrimSpace(template)
+	if template == "" {
+		return nil, fmt.Errorf("input template is required")
+	}
+	return map[string]any{"type": "object", "fields": fields, "template": template}, nil
+}
+
 func buildCapabilityQuestion(id, kind, instructions, criteria string) (map[string]api.Question, error) {
 	id = strings.TrimSpace(id)
 	instructions = strings.TrimSpace(instructions)
@@ -352,9 +400,9 @@ func buildCapabilityQuestion(id, kind, instructions, criteria string) (map[strin
 	return map[string]api.Question{id: question}, nil
 }
 
-func capabilitySnippet(baseURL, id, version string, authenticated bool) string {
+func capabilitySnippet(baseURL, id, version string, inputContract map[string]any, authenticated bool) string {
 	payload, _ := json.Marshal(map[string]any{
-		"input":    map[string]string{"text": "your text here"},
+		"input":    sampleCapabilityInput(inputContract),
 		"metadata": map[string]string{"ticket_id": "T-100"},
 	})
 	endpoint := fmt.Sprintf("%s/v1/capabilities/%s/invoke?version=%s", baseURL, id, url.QueryEscape(version))
@@ -362,5 +410,29 @@ func capabilitySnippet(baseURL, id, version string, authenticated bool) string {
 	if authenticated {
 		requestHeaders = "Authorization: Bearer $MODELCTL_API_TOKEN\n" + requestHeaders
 	}
-	return fmt.Sprintf("REST\nPOST %s\n%s\n\n%s\n\nPython SDK\nclient.invoke(%q, {\"text\": \"your text here\"}, {\"ticket_id\": \"T-100\"}, %q)\n\nJavaScript SDK\nawait client.invoke(%q, { text: \"your text here\" }, { ticket_id: \"T-100\" }, %q)", endpoint, requestHeaders, string(payload), id, version, id, version)
+	inputJSON, _ := json.Marshal(sampleCapabilityInput(inputContract))
+	return fmt.Sprintf("REST\nPOST %s\n%s\n\n%s\n\nPython SDK\nclient.invoke(%q, %s, {\"ticket_id\": \"T-100\"}, %q)\n\nJavaScript SDK\nawait client.invoke(%q, %s, { ticket_id: \"T-100\" }, %q)", endpoint, requestHeaders, string(payload), id, string(inputJSON), version, id, string(inputJSON), version)
+}
+
+func sampleCapabilityInput(inputContract map[string]any) map[string]any {
+	if fields, ok := inputContract["fields"].(map[string]any); ok {
+		result := make(map[string]any, len(fields))
+		for id, raw := range fields {
+			definition, _ := raw.(map[string]any)
+			switch definition["type"] {
+			case "number":
+				result[id] = 0
+			case "boolean":
+				result[id] = false
+			default:
+				result[id] = "your text here"
+			}
+		}
+		return result
+	}
+	field := "text"
+	if value, ok := inputContract["field"].(string); ok && value != "" {
+		field = value
+	}
+	return map[string]any{field: "your text here"}
 }

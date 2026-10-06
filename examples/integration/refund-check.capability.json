@@ -9,8 +9,12 @@
     "profile": "auto"
   },
   "input": {
-    "type": "text",
-    "field": "text"
+    "type": "object",
+    "fields": {
+      "text": { "type": "string", "required": true, "description": "Customer message" },
+      "order_id": { "type": "string", "required": false, "description": "Order number" }
+    },
+    "template": "Customer message: {{text}}\nOrder: {{order_id}}"
   },
   "questions": {
     "refund": {

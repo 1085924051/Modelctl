@@ -165,11 +165,22 @@ func TestAnswerValuePrefersNormalizedValue(t *testing.T) {
 }
 
 func TestCapabilitySnippetPinsVersionAndMetadata(t *testing.T) {
-	snippet := capabilitySnippet("http://127.0.0.1:11435", "refund-check", "1.2.0", true)
+	snippet := capabilitySnippet("http://127.0.0.1:11435", "refund-check", "1.2.0", map[string]any{"type": "text", "field": "text"}, true)
 	for _, expected := range []string{"refund-check/invoke?version=1.2.0", "MODELCTL_API_TOKEN", "ticket_id", "1.2.0"} {
 		if !strings.Contains(snippet, expected) {
 			t.Fatalf("integration snippet missing %q: %s", expected, snippet)
 		}
+	}
+}
+
+func TestBuildCapabilityInputParsesHumanFriendlyFields(t *testing.T) {
+	input, err := buildCapabilityInput("text:string:Customer message\norder_id:string:Order number", "Message: {{text}}\\nOrder: {{order_id}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := input["fields"].(map[string]any)
+	if len(fields) != 2 || fields["order_id"].(map[string]any)["type"] != "string" {
+		t.Fatalf("parsed input fields = %#v", fields)
 	}
 }
 

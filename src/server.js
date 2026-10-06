@@ -348,7 +348,33 @@ function validateCapability(body) {
   }
   const version = typeof body.version === "string" && body.version.trim() ? body.version.trim() : "1.0.0";
   if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) throw apiError(422, "CAPABILITY_VERSION_INVALID", "version must use semantic version format, for example 1.0.0");
-  return { schema_version: 1, id: body.id, version, name: body.name.trim(), description: body.description.trim(), model: { model_id: body.model.model_id, version: body.model.version || undefined, variant: body.model.variant, profile: body.model.profile || "auto" }, input: body.input && typeof body.input === "object" ? body.input : { type: "text", field: "text" }, questions: body.questions, created_at: body.created_at || new Date().toISOString(), updated_at: new Date().toISOString() };
+  const input = validateInputContract(body.input);
+  return { schema_version: 1, id: body.id, version, name: body.name.trim(), description: body.description.trim(), model: { model_id: body.model.model_id, version: body.model.version || undefined, variant: body.model.variant, profile: body.model.profile || "auto" }, input, questions: body.questions, created_at: body.created_at || new Date().toISOString(), updated_at: new Date().toISOString() };
+}
+
+function validateInputContract(input) {
+  if (input === undefined) return { type: "text", field: "text" };
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw apiError(422, "CAPABILITY_INVALID", "input must be an object");
+  if (input.fields !== undefined) {
+    if (!input.fields || typeof input.fields !== "object" || Array.isArray(input.fields) || !Object.keys(input.fields).length) throw apiError(422, "CAPABILITY_INVALID", "input.fields must be a non-empty object");
+    if (typeof input.template !== "string" || !input.template.trim()) throw apiError(422, "CAPABILITY_INVALID", "input.template is required when input.fields is used");
+    const fields = {};
+    for (const [id, definition] of Object.entries(input.fields)) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(id) || !definition || typeof definition !== "object" || Array.isArray(definition)) throw apiError(422, "CAPABILITY_INVALID", `invalid input field ${id}`);
+      const type = definition.type || "string";
+      if (!["string", "number", "boolean"].includes(type)) throw apiError(422, "CAPABILITY_INVALID", `input field ${id} has unsupported type`);
+      if (definition.required !== undefined && typeof definition.required !== "boolean") throw apiError(422, "CAPABILITY_INVALID", `input field ${id}.required must be boolean`);
+      if (definition.description !== undefined && typeof definition.description !== "string") throw apiError(422, "CAPABILITY_INVALID", `input field ${id}.description must be a string`);
+      fields[id] = { type, required: definition.required !== false, ...(definition.description?.trim() ? { description: definition.description.trim() } : {}) };
+    }
+    const placeholders = [...input.template.matchAll(/\{\{\s*([a-zA-Z][a-zA-Z0-9_-]{0,63})\s*\}\}/g)].map((match) => match[1]);
+    if (!placeholders.length) throw apiError(422, "CAPABILITY_INVALID", "input.template must reference at least one field");
+    for (const placeholder of placeholders) if (!Object.hasOwn(fields, placeholder)) throw apiError(422, "CAPABILITY_INVALID", `input.template references unknown field ${placeholder}`);
+    return { type: "object", fields, template: input.template.trim() };
+  }
+  const field = input.field || "text";
+  if (typeof field !== "string" || !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(field)) throw apiError(422, "CAPABILITY_INVALID", "input.field must be a valid field name");
+  return { type: "text", field };
 }
 
 function resolveCapability(state, id, version) {
@@ -367,9 +393,10 @@ async function getCapabilitySchema(id, version, res) {
   const state = await readState(); const capability = resolveCapability(state, id, version);
   const field = capability.input?.field || "text";
   const outputProperties = Object.fromEntries(Object.entries(capability.questions || {}).map(([questionID, question]) => [questionID, answerSchema(question)]));
+  const inputSchema = capability.input?.fields ? structuredInputSchema(capability.input) : { type: "object", required: [field], properties: { [field]: { type: "string" } } };
   return jsonResponse(res, 200, {
     capability: { id: capability.id, version: capability.version, name: capability.name },
-    request_schema: { type: "object", required: ["input"], properties: { input: { type: "object", required: [field], properties: { [field]: { type: "string" } } }, metadata: { type: "object" } } },
+    request_schema: { type: "object", required: ["input"], properties: { input: inputSchema, metadata: { type: "object" } } },
     response_schema: { type: "object", required: ["output", "run_id"], properties: { output: { type: "object", required: Object.keys(outputProperties), properties: outputProperties }, raw: { type: "object" }, model: { type: "object" }, metadata: { type: "object" }, run_id: { type: "string" } } },
   });
 }
@@ -411,14 +438,13 @@ async function invokeCapability(id, version, req, res) {
 
 async function executeCapability(id, version, body) {
   const state = await readState(); const capability = resolveCapability(state, id, version);
-  const input = objectBody(body.input || body); const field = capability.input?.field || "text"; const text = input[field];
-  if (typeof text !== "string" || !text.trim()) throw apiError(422, "INPUT_INVALID", `${field} must be a non-empty string`);
+  const input = objectBody(body.input || body); const { text, normalizedInput } = normalizeCapabilityInput(capability.input, input);
   const metadata = body.metadata === undefined ? undefined : objectBody(body.metadata);
   const ready = matchingCapabilityInstances(state, capability);
   let selected = ready.find((instance) => instance.default) || ready[0];
   if (!selected) selected = await ensureCapabilityInstance(capability);
   const response = await invokeInstanceBody(selected.id, "system_one", { state: { body: text.trim() }, questions: capability.questions });
-  const run = { id: newId("run"), capability_id: capability.id, capability_version: capability.version, instance_id: selected.id, input: { [field]: text.trim() }, ...(metadata ? { metadata } : {}), response, created_at: new Date().toISOString() };
+  const run = { id: newId("run"), capability_id: capability.id, capability_version: capability.version, instance_id: selected.id, input: normalizedInput, ...(metadata ? { metadata } : {}), response, created_at: new Date().toISOString() };
   await updateState((next) => { next.runs[run.id] = run; });
   return { request_id: run.id, capability: { id: capability.id, version: capability.version }, output: normalizeAnswers(response.answers || response), raw: response, model: selected.model, ...(metadata ? { metadata } : {}), run_id: run.id };
 }
@@ -430,6 +456,40 @@ function normalizeAnswers(answers) {
     const value = answer.type === "choice" ? answer.choice : answer.type === "score" ? answer.score : answer.noul;
     return [id, { ...answer, value }];
   }));
+}
+
+function normalizeCapabilityInput(contract, input) {
+  if (contract?.fields) {
+    const fields = contract.fields;
+    const unknown = Object.keys(input).filter((key) => !Object.hasOwn(fields, key));
+    if (unknown.length) throw apiError(422, "INPUT_INVALID", `unknown input field: ${unknown[0]}`);
+    const values = {};
+    for (const [id, definition] of Object.entries(fields)) {
+      const value = input[id];
+      if (value === undefined || value === null || value === "") {
+        if (definition.required) throw apiError(422, "INPUT_INVALID", `${id} is required`);
+        values[id] = "";
+        continue;
+      }
+      if (definition.type === "number" && (typeof value !== "number" || !Number.isFinite(value))) throw apiError(422, "INPUT_INVALID", `${id} must be a number`);
+      if (definition.type === "boolean" && typeof value !== "boolean") throw apiError(422, "INPUT_INVALID", `${id} must be a boolean`);
+      if (definition.type === "string" && typeof value !== "string") throw apiError(422, "INPUT_INVALID", `${id} must be a string`);
+      values[id] = value;
+    }
+    const text = contract.template.replace(/\{\{\s*([a-zA-Z][a-zA-Z0-9_-]{0,63})\s*\}\}/g, (_, id) => String(values[id] ?? "")).trim();
+    if (!text) throw apiError(422, "INPUT_INVALID", "input template produced an empty model input");
+    return { text, normalizedInput: values };
+  }
+  const field = contract?.field || "text";
+  const value = input[field];
+  if (typeof value !== "string" || !value.trim()) throw apiError(422, "INPUT_INVALID", `${field} must be a non-empty string`);
+  return { text: value.trim(), normalizedInput: { [field]: value.trim() } };
+}
+
+function structuredInputSchema(input) {
+  const properties = Object.fromEntries(Object.entries(input.fields).map(([id, definition]) => [id, { type: definition.type, ...(definition.description ? { description: definition.description } : {}) }]));
+  const required = Object.entries(input.fields).filter(([, definition]) => definition.required).map(([id]) => id);
+  return { type: "object", ...(required.length ? { required } : {}), properties };
 }
 
 function matchingCapabilityInstances(state, capability) {

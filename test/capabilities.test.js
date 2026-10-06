@@ -126,6 +126,16 @@ test("capability versions use semantic versioning", async () => {
   assert.equal(invalid.body.error.code, "CAPABILITY_VERSION_INVALID");
 });
 
+test("structured capability input contracts reject invalid templates", async () => {
+  const invalid = await request("/v1/capabilities", "POST", {
+    ...capability,
+    id: "invalid-input-contract",
+    input: { type: "object", fields: { text: { type: "string" } }, template: "{{missing}}" },
+  });
+  assert.equal(invalid.status, 422);
+  assert.equal(invalid.body.error.code, "CAPABILITY_INVALID");
+});
+
 test("capability invocation explains that its model must be downloaded", async () => {
   await request("/v1/capabilities", "POST", capability);
   const result = await request("/v1/capabilities/refund-check/invoke", "POST", { input: { text: "Please refund this order" } });
@@ -186,6 +196,50 @@ test("capability invocation returns normalized answers and preserves metadata", 
   const history = await request("/v1/runs");
   assert.deepEqual(history.body.items[0].metadata, { ticket_id: "T-100", tenant_id: "acme" });
   assert.equal(history.body.items[0].response.answers.team.choice, "billing");
+});
+
+test("structured capability inputs validate fields and render the Laya prompt", async () => {
+  let adapterInput;
+  adapter = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    adapterInput = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ answers: { refund: { type: "noul", noul: 0.8 } } }));
+  });
+  await new Promise((resolve) => adapter.listen(0, "127.0.0.1", resolve));
+  await request("/v1/capabilities", "POST", {
+    ...capability,
+    id: "refund-structured",
+    input: {
+      type: "object",
+      fields: {
+        text: { type: "string", required: true, description: "Customer message" },
+        order_id: { type: "string", required: false, description: "Order number" },
+      },
+      template: "Customer message: {{text}}\nOrder: {{order_id}}",
+    },
+  });
+  const schema = await request("/v1/capabilities/refund-structured/schema");
+  assert.deepEqual(schema.body.request_schema.properties.input.required, ["text"]);
+  assert.equal(schema.body.request_schema.properties.input.properties.order_id.type, "string");
+  const port = adapter.address().port;
+  await updateState((state) => {
+    state.models[idFor("convaiinnovations/laya", "0.3.18", "english")] = {
+      id: "convaiinnovations/laya", version: "0.3.18", revision: "cf7c54c0586eede67d827dfaab8cd2d2007273e",
+      variant: "english", path: root, installed_at: new Date().toISOString(),
+    };
+    state.instances["inst_structured"] = {
+      id: "inst_structured", status: "ready", model: { id: "convaiinnovations/laya", version: "0.3.18", revision: "cf7c54c0586eede67d827dfaab8cd2d2007273e", variant: "english" },
+      runtime: "laya-python@0.3.18", profile: "cpu", device: "cpu", host: "127.0.0.1", port,
+      capabilities: ["system_one"], default: true,
+    };
+  });
+  const result = await request("/v1/capabilities/refund-structured/invoke", "POST", { input: { text: "charged twice", order_id: "O-42" } });
+  assert.equal(result.status, 200);
+  assert.equal(adapterInput.state.body, "Customer message: charged twice\nOrder: O-42");
+  const history = await request("/v1/runs");
+  assert.deepEqual(history.body.items[0].input, { text: "charged twice", order_id: "O-42" });
 });
 
 test("capability metadata must be an object", async () => {
