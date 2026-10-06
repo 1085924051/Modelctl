@@ -22,6 +22,19 @@ modelctl stop <instance-id>
 modelctl remove convaiinnovations/laya --variant english --purge
 ```
 
+Developer-facing capability commands are also available after a capability is
+published in Desktop:
+
+```bash
+modelctl capabilities list
+modelctl capabilities schema refund-check
+modelctl capabilities invoke refund-check --json request.json
+modelctl capabilities batch refund-check --json batch.json
+```
+
+Set `MODELCTL_URL` and `MODELCTL_API_TOKEN` for an internal enterprise daemon;
+the CLI forwards the bearer token on every control-plane request.
+
 `setup` is required once per machine. After it completes, modelctl discovers
 the private Python environment automatically, starts the local daemon on demand,
 waits for `pull` to finish, and pulls a missing variant automatically before

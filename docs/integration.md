@@ -104,7 +104,7 @@ administrator activates another version while the batch is running.
 ## Integration choices
 
 - REST: browser, Python, Java, Go, and internal services.
-- CLI: scripts, local automation, and CI tasks.
+- CLI: scripts, local automation, CI tasks, and capability contract checks (`modelctl capabilities schema ...`).
 - MCP: AI agents and desktop developer tools.
 
 The desktop console is the administration and test surface for all three modes.
