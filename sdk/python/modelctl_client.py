@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from urllib import request
+from urllib.parse import quote
 
 
 class ModelctlError(RuntimeError):
@@ -13,28 +16,41 @@ class ModelctlError(RuntimeError):
 class Modelctl:
     def __init__(self, base_url: str = "http://127.0.0.1:11435", token: str | None = None):
         self.base_url = base_url.rstrip("/")
-        self.token = token
+        self.token = os.environ.get("MODELCTL_API_TOKEN") if token is None else token
 
     def invoke(self, capability_id: str, input: dict, metadata: dict | None = None, version: str | None = None) -> dict:
         body = {"input": input}
         if metadata:
             body["metadata"] = metadata
-        suffix = f"?version={version}" if version else ""
-        return self._request("POST", f"/v1/capabilities/{capability_id}/invoke{suffix}", body)
+        suffix = f"?version={quote(version, safe='')}" if version else ""
+        return self._request("POST", f"/v1/capabilities/{quote(capability_id, safe='')}/invoke{suffix}", body)
 
     def capabilities(self) -> list[dict]:
         return self._request("GET", "/v1/capabilities").get("items", [])
 
     def schema(self, capability_id: str, version: str | None = None) -> dict:
-        suffix = f"?version={version}" if version else ""
-        return self._request("GET", f"/v1/capabilities/{capability_id}/schema{suffix}")
+        suffix = f"?version={quote(version, safe='')}" if version else ""
+        return self._request("GET", f"/v1/capabilities/{quote(capability_id, safe='')}/schema{suffix}")
 
     def runs(self) -> list[dict]:
         return self._request("GET", "/v1/runs").get("items", [])
 
     def batch(self, capability_id: str, items: list[dict], version: str | None = None) -> dict:
-        suffix = f"?version={version}" if version else ""
-        return self._request("POST", f"/v1/capabilities/{capability_id}/batch{suffix}", {"items": items})
+        suffix = f"?version={quote(version, safe='')}" if version else ""
+        return self._request("POST", f"/v1/capabilities/{quote(capability_id, safe='')}/batch{suffix}", {"items": items})
+
+    def task(self, task_id: str) -> dict:
+        return self._request("GET", f"/v1/tasks/{quote(task_id, safe='')}")
+
+    def wait_task(self, task_id: str, poll_seconds: float = 0.5, timeout_seconds: float = 3600) -> dict:
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            result = self.task(task_id)
+            if result.get("status") in {"succeeded", "failed", "cancelled"}:
+                return result
+            if time.monotonic() >= deadline:
+                raise ModelctlError(f"task {task_id} did not finish before timeout")
+            time.sleep(poll_seconds)
 
     def _request(self, method: str, path: str, body: dict | None = None) -> dict:
         payload = None if body is None else json.dumps(body).encode("utf-8")

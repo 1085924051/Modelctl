@@ -9,6 +9,7 @@ const webFiles = new Map([
   ["/web/app.js", ["app.js", "text/javascript; charset=utf-8"]],
   ["/web/styles.css", ["styles.css", "text/css; charset=utf-8"]],
 ]);
+const capabilityStarts = new Map();
 
 export async function createServer({ port = Number(process.env.MODELCTL_PORT || 11435), host = process.env.MODELCTL_HOST || "127.0.0.1" } = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("MODELCTL_PORT must be an integer between 0 and 65535");
@@ -213,7 +214,12 @@ async function createPullStream(req, res) {
 }
 
 async function createInstance(req, res) {
-  const body = objectBody(await readJson(req)); if (typeof body.model_id !== "string" || !body.model_id) throw apiError(400, "INVALID_REQUEST", "model_id is required"); const manifests = await listCatalog(); const m = findManifest(manifests, body.model_id, body.version); if (body.revision && body.revision !== m.source?.revision) throw apiError(409, "REVISION_MISMATCH", "requested revision does not match catalog revision"); const v = findVariant(m, body.variant); const profile = body.profile || "auto";
+  const body = objectBody(await readJson(req));
+  return jsonResponse(res, 200, await startInstance(body));
+}
+
+async function startInstance(body) {
+  if (typeof body.model_id !== "string" || !body.model_id) throw apiError(400, "INVALID_REQUEST", "model_id is required"); const manifests = await listCatalog(); const m = findManifest(manifests, body.model_id, body.version); if (body.revision && body.revision !== m.source?.revision) throw apiError(409, "REVISION_MISMATCH", "requested revision does not match catalog revision"); const v = findVariant(m, body.variant); const profile = body.profile || "auto";
   if (!(m.profiles || []).some((item) => item.id === profile)) throw apiError(400, "INVALID_REQUEST", `unsupported profile: ${profile}`);
   if (!profileSupportsHost(m, profile)) throw apiError(400, "PROFILE_UNSUPPORTED", `profile ${profile} is not supported on ${hostPlatform()}`);
   const s = await readState(); const installed = s.models[idFor(m.id, m.version, v.id)];
@@ -228,7 +234,7 @@ async function createInstance(req, res) {
     await updateState((state) => { state.instances[id].status = "failed"; state.instances[id].error = { code, message: error.message }; });
     throw apiError(error.status || 503, code, error.message, { instance_id: id }, error.retryable ?? true);
   }
-  return jsonResponse(res, 200, (await readState()).instances[id]);
+  return (await readState()).instances[id];
 }
 
 async function cancelTask(id, res) {
@@ -341,6 +347,7 @@ function validateCapability(body) {
     if (["choice", "score"].includes(question.type) && (!question.criteria || (Array.isArray(question.criteria) && !question.criteria.length))) throw apiError(422, "CAPABILITY_INVALID", `question ${id} needs criteria`);
   }
   const version = typeof body.version === "string" && body.version.trim() ? body.version.trim() : "1.0.0";
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) throw apiError(422, "CAPABILITY_VERSION_INVALID", "version must use semantic version format, for example 1.0.0");
   return { schema_version: 1, id: body.id, version, name: body.name.trim(), description: body.description.trim(), model: { model_id: body.model.model_id, version: body.model.version || undefined, variant: body.model.variant, profile: body.model.profile || "auto" }, input: body.input && typeof body.input === "object" ? body.input : { type: "text", field: "text" }, questions: body.questions, created_at: body.created_at || new Date().toISOString(), updated_at: new Date().toISOString() };
 }
 
@@ -385,12 +392,36 @@ async function executeCapability(id, version, body) {
   const state = await readState(); const capability = resolveCapability(state, id, version);
   const input = objectBody(body.input || body); const field = capability.input?.field || "text"; const text = input[field];
   if (typeof text !== "string" || !text.trim()) throw apiError(422, "INPUT_INVALID", `${field} must be a non-empty string`);
-  const ready = Object.values(state.instances).filter((instance) => instance.status === "ready" && instance.capabilities?.includes("system_one") && instance.model?.id === capability.model.model_id && instance.model?.variant === capability.model.variant);
-  const selected = ready.find((instance) => instance.default) || ready[0]; if (!selected) throw apiError(503, "CAPABILITY_NOT_READY", "start the capability model instance before invoking it", { model_id: capability.model.model_id, variant: capability.model.variant }, true);
+  const ready = matchingCapabilityInstances(state, capability);
+  let selected = ready.find((instance) => instance.default) || ready[0];
+  if (!selected) selected = await ensureCapabilityInstance(capability);
   const response = await invokeInstanceBody(selected.id, "system_one", { state: { body: text.trim() }, questions: capability.questions });
   const run = { id: newId("run"), capability_id: capability.id, capability_version: capability.version, instance_id: selected.id, input: { [field]: text.trim() }, response, created_at: new Date().toISOString() };
   await updateState((next) => { next.runs[run.id] = run; });
   return { request_id: run.id, capability: { id: capability.id, version: capability.version }, output: response.answers || response, raw: response, model: selected.model, run_id: run.id };
+}
+
+function matchingCapabilityInstances(state, capability) {
+  return Object.values(state.instances).filter((instance) => {
+    if (instance.status !== "ready" || !instance.capabilities?.includes("system_one")) return false;
+    if (instance.model?.id !== capability.model.model_id || instance.model?.variant !== capability.model.variant) return false;
+    return !capability.model.version || instance.model?.version === capability.model.version;
+  });
+}
+
+async function ensureCapabilityInstance(capability) {
+  const version = capability.model.version || "catalog";
+  const key = `${capability.model.model_id}@${version}#${capability.model.variant}#${capability.model.profile || "auto"}`;
+  const existing = capabilityStarts.get(key);
+  if (existing) return existing;
+  const pending = (async () => {
+    const state = await readState();
+    const installed = Object.values(state.models).find((item) => item.id === capability.model.model_id && item.variant === capability.model.variant && (!capability.model.version || item.version === capability.model.version));
+    if (!installed) throw apiError(409, "MODEL_NOT_INSTALLED", "download the capability model before invoking it", { model_id: capability.model.model_id, version: capability.model.version, variant: capability.model.variant });
+    return startInstance({ model_id: installed.id, version: installed.version, variant: installed.variant, profile: capability.model.profile || "auto", default: true });
+  })();
+  capabilityStarts.set(key, pending);
+  try { return await pending; } finally { if (capabilityStarts.get(key) === pending) capabilityStarts.delete(key); }
 }
 
 async function createCapabilityBatch(id, version, req, res) {

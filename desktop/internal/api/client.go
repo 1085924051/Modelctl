@@ -209,6 +209,7 @@ type Capability struct {
 	UpdatedAt     string                 `json:"updated_at"`
 	Active        bool                   `json:"active"`
 	AvailableVersions []string            `json:"available_versions"`
+	Activate      *bool                  `json:"activate,omitempty"`
 }
 
 type CapabilitiesResponse struct { Items []Capability `json:"items"` }

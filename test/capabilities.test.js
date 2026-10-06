@@ -91,11 +91,17 @@ test("capability validation hides the raw protocol from invalid clients", async 
   assert.equal(invalid.body.error.code, "CAPABILITY_INVALID");
 });
 
-test("capability invocation explains that its model must be ready", async () => {
+test("capability versions use semantic versioning", async () => {
+  const invalid = await request("/v1/capabilities", "POST", { ...capability, version: "draft" });
+  assert.equal(invalid.status, 422);
+  assert.equal(invalid.body.error.code, "CAPABILITY_VERSION_INVALID");
+});
+
+test("capability invocation explains that its model must be downloaded", async () => {
   await request("/v1/capabilities", "POST", capability);
   const result = await request("/v1/capabilities/refund-check/invoke", "POST", { input: { text: "Please refund this order" } });
-  assert.equal(result.status, 503);
-  assert.equal(result.body.error.code, "CAPABILITY_NOT_READY");
+  assert.equal(result.status, 409);
+  assert.equal(result.body.error.code, "MODEL_NOT_INSTALLED");
 });
 
 test("capability batches return a task that records per-item errors", async () => {

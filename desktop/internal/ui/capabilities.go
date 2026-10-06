@@ -22,6 +22,8 @@ func (d *Desktop) renderCapabilities() {
 
 	id := widget.NewEntry()
 	id.SetPlaceHolder("refund-check")
+	version := widget.NewEntry()
+	version.SetText("1.0.0")
 	name := widget.NewEntry()
 	name.SetPlaceHolder("Refund request check")
 	description := widget.NewMultiLineEntry()
@@ -44,6 +46,8 @@ func (d *Desktop) renderCapabilities() {
 	}
 	addQuestion()
 	status := widget.NewLabel("")
+	activate := widget.NewCheck("Activate immediately", nil)
+	activate.SetChecked(true)
 
 	create := widget.NewButton("Publish capability", func() {
 		selected, ok := modelByLabel[modelSelect.Selected]
@@ -52,11 +56,14 @@ func (d *Desktop) renderCapabilities() {
 		if err != nil { status.SetText(err.Error()); return }
 		capability := api.Capability{
 			ID: strings.TrimSpace(id.Text), Name: strings.TrimSpace(name.Text), Description: strings.TrimSpace(description.Text),
-			Version: "1.0.0", SchemaVersion: 1,
+			Version: strings.TrimSpace(version.Text), SchemaVersion: 1,
 			Model: api.CapabilityModel{ModelID: selected.summary.ID, Version: selected.summary.Version, Variant: selected.variant, Profile: selected.profile},
 			Input: map[string]any{"type": "text", "field": "text"}, Questions: questions,
 		}
+		activateValue := activate.Checked
+		capability.Activate = &activateValue
 		if capability.ID == "" || capability.Name == "" { status.SetText("ID and name are required."); return }
+		if capability.Version == "" { status.SetText("Version is required."); return }
 		created, err := d.client.CreateCapability(capability)
 		if err != nil { status.SetText(err.Error()); return }
 		d.capabilities = append(d.capabilities, created)
@@ -66,11 +73,13 @@ func (d *Desktop) renderCapabilities() {
 
 	form := widget.NewCard("Publish a capability", "Create a business-facing contract", container.NewVBox(
 		widget.NewLabel("ID"), id,
+		widget.NewLabel("Version"), version,
 		widget.NewLabel("Display name"), name,
 		widget.NewLabel("Description"), description,
 		widget.NewLabel("Model"), modelSelect,
 		container.NewBorder(nil, nil, widget.NewLabel("Questions"), widget.NewButton("Add question", addQuestion)),
 		questionList,
+		activate,
 		container.NewHBox(create, status),
 	))
 	box.Add(form)
@@ -215,5 +224,5 @@ func buildCapabilityQuestion(id, kind, instructions, criteria string) (map[strin
 func capabilitySnippet(baseURL, id string) string {
 	payload, _ := json.Marshal(map[string]any{"input": map[string]string{"text": "your text here"}})
 	endpoint := fmt.Sprintf("%s/v1/capabilities/%s/invoke", baseURL, id)
-	return fmt.Sprintf("POST %s\nAuthorization: Bearer $MODELCTL_API_TOKEN\nContent-Type: application/json\n\n%s\n\nPython: requests.post(%q, headers={\"Authorization\": \"Bearer \" + token}, json=%s)", endpoint, string(payload), endpoint, string(payload))
+	return fmt.Sprintf("REST\nPOST %s\nAuthorization: Bearer $MODELCTL_API_TOKEN\nContent-Type: application/json\n\n%s\n\nPython SDK\nclient.invoke(%q, {\"text\": \"your text here\"})\n\nJavaScript SDK\nawait client.invoke(%q, { text: \"your text here\" })", endpoint, string(payload), id, id)
 }

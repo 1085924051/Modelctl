@@ -49,6 +49,12 @@ Use `GET /v1/capabilities/{id}/schema` before generating a form, validating a
 queue message, or writing a contract test. Use `?version=1.0.0` when a service
 needs a pinned contract during a gradual rollout.
 
+After the model variant has been downloaded, the first capability invocation
+can start its matching runtime automatically. The business service does not
+need to call the instance lifecycle API. If the model has not been downloaded,
+the API returns `MODEL_NOT_INSTALLED` with the model and variant to prepare in
+Desktop or through the CLI.
+
 ## Enterprise server mode
 
 Run Modelctl on an internal inference host. Remote binding is opt-in and

@@ -35,6 +35,20 @@ export class Modelctl {
     });
   }
 
+  async task(taskId) {
+    return this.request(`/v1/tasks/${encodeURIComponent(taskId)}`);
+  }
+
+  async waitTask(taskId, { pollMs = 500, timeoutMs = 3600000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      const result = await this.task(taskId);
+      if (["succeeded", "failed", "cancelled"].includes(result.status)) return result;
+      if (Date.now() >= deadline) throw new ModelctlError(`task ${taskId} did not finish before timeout`);
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+  }
+
   async request(path, options = {}) {
     const headers = { accept: "application/json", ...(options.body ? { "content-type": "application/json" } : {}) };
     if (this.token) headers.authorization = `Bearer ${this.token}`;
