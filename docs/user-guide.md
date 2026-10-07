@@ -1,0 +1,44 @@
+# Modelctl 桌面端使用手册
+
+Modelctl 帮你在本机下载和运行 Laya 模型，再把模型包装成可供业务程序调用的“能力”。模型权重不包含在安装包内，首次使用需要下载。当前公开安装包支持 macOS Apple Silicon、Windows x64 和 Linux x86_64。
+
+## 安装与首次启动
+
+从 GitHub Actions 中选择**成功完成**、提交版本为当前目标版本的 `Desktop self-contained runtimes` 构建，下载对应桌面 artifact。桌面 artifact 与 `modelctl-runtime-*` 是不同的：后者只是运行时，不是可直接打开的客户端。
+
+| 系统 | 选择的桌面 artifact | 打开方式 |
+| --- | --- | --- |
+| Windows x64 | `modelctl-desktop-windows-linux-self-contained` 内的 `Modelctl-windows-x64-v*.zip` | 解压两次，保持 `Modelctl.exe` 与 `runtime` 文件夹同级，运行 `Modelctl.exe` |
+| Linux x86_64 | 同一 artifact 内的 `.AppImage` 或 `.tar.xz` | AppImage 加执行权限后运行；或解压 tar.xz 后按随包 README 启动 |
+| macOS Apple Silicon | `modelctl-desktop-macos-self-contained` 内的 `.dmg` 或 `.zip` | 从 DMG/ZIP 打开 `Modelctl.app`；当前包为 ad-hoc 签名 |
+
+程序默认在 `http://127.0.0.1:11435` 启动本机模型服务。首次启动时 Models 页面会先显示“正在连接模型服务”。如果出现“模型服务未就绪”，先检查完整解压、`runtime` 目录是否在正确位置，然后点击“重试连接”。不要只复制单独的可执行文件。
+
+## 下载并试用模型
+
+1. 打开左侧 **Models**。看到 **Laya** 卡片后选择 `english`（英文内容）或 `multilingual`（含中文等多语言内容）。
+2. 点击卡片中的 **Download model**。等待进度完成并显示 **Download verified**。模型约需数百 MB，下载位置在用户数据目录（默认 `~/.modelctl`，Windows 对应用户主目录下的 `.modelctl`）。
+3. 点击 **Load & run**。等待状态显示 **Ready**。Windows/Linux 基础包默认提供 CPU 路径；macOS Apple Silicon 可使用兼容的 MPS 路径。首次加载可能需要一些时间。
+4. 打开 **Playground**，选中正在运行的实例，在 Form 模式输入一段文本和判断问题，提交后查看结构化结果。熟悉 Laya 原始协议的开发者也可以切换 JSON 模式。
+
+下载模型与加载模型是两步。**Download model** 将权重保存到本机；**Load & run** 将已下载的权重加载到运行时。也可以直接点击 **Load & run**，缺少权重时程序会先下载。
+
+## 让应用调用模型
+
+1. 打开 **Capabilities**，选择“退款识别”“工单路由”等模板，填写输入字段、判断问题和输出类型。
+2. 用真实样例执行单条或批量测试，再发布一个版本，例如 `refund-check@1.0.0`。
+3. 查看该能力的 readiness。若提示 `model_not_installed`，下载它绑定的模型版本；若是 `not_started`，首次调用会自动启动运行时。
+4. 打开 **Integration**，复制该能力的 Schema、OpenAPI 或 curl/Python/JavaScript 示例。业务程序只传业务字段，不需要构造 Laya 的 `state/questions`。
+
+生产环境建议固定能力版本（`?version=1.0.0`），并保存返回的 `run_id`、`capability.version` 和自己的业务单号。完整接口见 [API 文档](api-guide.md)，端到端场景见 [使用案例](use-cases.md)。
+
+## 常见问题
+
+| 现象 | 检查方法 |
+| --- | --- |
+| Models 页面看不到 Laya 卡片 | 看页面中央的连接错误；检查完整解压与 `runtime` 目录，确认 `http://127.0.0.1:11435/health` 可访问后点 Refresh |
+| 下载失败 | 在 Settings 配置代理后重试；下载支持断点续传，失败时查看页面提示 |
+| 加载失败 | 先确认模型状态为 Downloaded，再查看设备选项；Windows/Linux 首先选 `auto` 或 `cpu` |
+| 能力调用返回 `MODEL_NOT_INSTALLED` | 下载该能力绑定的 model ID 和 variant，而不是另一个语言版本 |
+| 应用无法远程访问 | 桌面端默认只监听本机；企业内网部署需显式配置监听地址和 token，见 [API 文档](api-guide.md) |
+

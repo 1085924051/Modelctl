@@ -1,6 +1,9 @@
 # modelctl
 
-`modelctl` is a local model deployment control plane for Linux and macOS. It is
+首次使用请读 [桌面端使用手册](docs/user-guide.md)；业务系统接入请读
+[Capability API 文档](docs/api-guide.md) 和 [使用案例](docs/use-cases.md)。
+
+`modelctl` is a local model deployment control plane for macOS, Windows, and Linux. It is
 designed around the Ollama workflow (`catalog -> pull -> run -> invoke`) while
 keeping model runtimes in separate adapter processes.
 

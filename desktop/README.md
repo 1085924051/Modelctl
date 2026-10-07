@@ -1,6 +1,6 @@
 # Modelctl Desktop
 
-Native Go/Fyne macOS client for the local Modelctl daemon.
+Native Go/Fyne client for the local Modelctl daemon on macOS, Windows, and Linux.
 
 ## Windows first run / Windows 首次使用
 
