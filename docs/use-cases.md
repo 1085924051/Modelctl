@@ -44,4 +44,3 @@ print(result["run_id"], refund_probability)
 任务服务轮询 `/v1/tasks/{task_id}`，按 `results[].index` 回写结果，并单独重试 `errors[]` 中的失败项。高风险或需要复核的结果只进入人工审核清单；Modelctl 不负责最终审批动作。模型版本升级时先发布不激活的新版本，用历史文档对比结果，再切换 active 版本。
 
 这三个案例都遵循同一条链路：**下载模型 → 定义结构化能力 → 用真实数据测试 → 发布版本 → 业务系统按固定版本调用 → 保存运行记录**。桌面操作见 [使用手册](user-guide.md)，接口细节见 [API 文档](api-guide.md)。
-

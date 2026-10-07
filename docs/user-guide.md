@@ -41,4 +41,3 @@ Modelctl 帮你在本机下载和运行 Laya 模型，再把模型包装成可�
 | 加载失败 | 先确认模型状态为 Downloaded，再查看设备选项；Windows/Linux 首先选 `auto` 或 `cpu` |
 | 能力调用返回 `MODEL_NOT_INSTALLED` | 下载该能力绑定的 model ID 和 variant，而不是另一个语言版本 |
 | 应用无法远程访问 | 桌面端默认只监听本机；企业内网部署需显式配置监听地址和 token，见 [API 文档](api-guide.md) |
-
