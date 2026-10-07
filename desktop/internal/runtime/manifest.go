@@ -70,7 +70,12 @@ func Resolve(appPath string) (Paths, error) {
 		return Paths{}, fmt.Errorf("resolve application path: %w", err)
 	}
 	dir := filepath.Dir(appPath)
-	candidates := []string{filepath.Join(dir, "runtime"), filepath.Join(dir, "..", "runtime"), filepath.Join(dir, "..", "Resources", "runtime")}
+	candidates := []string{
+		filepath.Join(dir, "runtime"),
+		filepath.Join(dir, "..", "runtime"),
+		filepath.Join(dir, "..", "Resources", "runtime"),
+		filepath.Join(dir, "..", "share", "modelctl", "runtime"),
+	}
 	if filepath.Base(dir) == "MacOS" {
 		candidates = append([]string{filepath.Join(dir, "..", "Resources", "runtime")}, candidates...)
 	}
@@ -86,7 +91,9 @@ func Resolve(appPath string) (Paths, error) {
 				NodeBinary:       filepath.Join(root, requiredNodeRelativePath()),
 				ControlPlaneRoot: filepath.Join(root, "control-plane"),
 				PythonBinary:     filepath.Join(root, requiredPythonRelativePath()),
-				LogDir:           filepath.Join(root, "logs"),
+				// The runtime can live on a read-only DMG or AppImage mount.
+				// Supervisor stores logs under the user data directory instead.
+				LogDir: "",
 			}, nil
 		}
 	}

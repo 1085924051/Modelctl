@@ -16,7 +16,9 @@ func main() {
 	var supervisor *runtimepkg.Supervisor
 	var startupError error
 	if baseURL == "" {
-		if paths, err := runtimepkg.Resolve(""); err == nil {
+		if paths, err := runtimepkg.Resolve(""); err != nil {
+			startupError = err
+		} else {
 			if err := runtimepkg.Verify(paths); err != nil {
 				startupError = err
 			} else {

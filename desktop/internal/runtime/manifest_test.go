@@ -30,6 +30,34 @@ func TestResolveFindsRuntimeBesideExecutable(t *testing.T) {
 	}
 }
 
+func TestResolveFindsAppImageRuntime(t *testing.T) {
+	root := t.TempDir()
+	executable := filepath.Join(root, "usr", "bin", "modelctl-desktop")
+	runtimeRoot := filepath.Join(root, "usr", "share", "modelctl", "runtime")
+	if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(executable, []byte("client"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(runtimeRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtimeRoot, "runtime-manifest.json"), []byte(`{"schema_version":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := Resolve(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paths.Root != runtimeRoot {
+		t.Fatalf("runtime root = %q, want %q", paths.Root, runtimeRoot)
+	}
+	if paths.LogDir != "" {
+		t.Fatalf("resolved runtime should not write logs into package: %q", paths.LogDir)
+	}
+}
+
 func TestVerifyAcceptsValidRuntime(t *testing.T) {
 	root := writeFixtureRuntime(t, targetTriple())
 	paths := Paths{Root: root, ManifestPath: filepath.Join(root, "runtime-manifest.json")}
