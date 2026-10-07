@@ -20,6 +20,7 @@ mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/modelctl" "$APPDIR/usr/share/icons
 tar -xJf "$SOURCE_TAR" -C "$STAGE"
 install -m 0755 "$STAGE/usr/local/bin/desktop" "$APPDIR/usr/bin/modelctl-desktop"
 cp -R "$RUNTIME" "$APPDIR/usr/share/modelctl/runtime"
+node "$ROOT/runtime/tests/verify-runtime.mjs" "$APPDIR/usr/share/modelctl/runtime"
 if [ -f "$STAGE/usr/local/share/pixmaps/com.modelctl.desktop.png" ]; then
   install -m 0644 "$STAGE/usr/local/share/pixmaps/com.modelctl.desktop.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/modelctl.png"
   install -m 0644 "$STAGE/usr/local/share/pixmaps/com.modelctl.desktop.png" "$APPDIR/modelctl.png"

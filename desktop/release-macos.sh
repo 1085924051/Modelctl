@@ -28,6 +28,7 @@ else
   LABEL="adhoc"
 fi
 codesign --verify --deep --strict "$APP"
+node "$ROOT/runtime/tests/verify-runtime.mjs" "$APP/Contents/Resources/runtime"
 
 PACKAGE="Modelctl-macOS-${ARCH}-v${VERSION}-${LABEL}"
 ZIP="$DIST/${PACKAGE}.zip"
