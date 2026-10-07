@@ -25,26 +25,32 @@ type modelState struct {
 }
 
 type Desktop struct {
-	client          *api.Client
-	app             fyne.App
-	window          fyne.Window
-	page            *container.Scroll
-	status          *widget.Label
-	models          []modelState
-	instances       []api.Instance
-	capabilities    []api.Capability
-	runs            []api.Run
-	selectedPage    string
-	refreshMu       sync.Mutex
-	playground      fyne.CanvasObject
-	instanceSelect  *widget.Select
-	questionRows    []*questionEditor
-	questionList    *fyne.Container
-	result          *widget.RichText
-	supervisor      *runtimepkg.Supervisor
-	startupError    error
-	connectionError string
-	modelsLoaded    bool
+	client            *api.Client
+	app               fyne.App
+	window            fyne.Window
+	page              *container.Scroll
+	status            *widget.Label
+	models            []modelState
+	instances         []api.Instance
+	capabilities      []api.Capability
+	runs              []api.Run
+	selectedPage      string
+	refreshMu         sync.Mutex
+	playground        fyne.CanvasObject
+	instanceSelect    *widget.Select
+	questionRows      []*questionEditor
+	questionList      *fyne.Container
+	result            *widget.RichText
+	supervisor        *runtimepkg.Supervisor
+	startupError      error
+	connectionError   string
+	modelsLoaded      bool
+	language          string
+	navButtons        map[string]*widget.Button
+	playgroundBody    *widget.Entry
+	playgroundRaw     *widget.Entry
+	playgroundMode    *widget.RadioGroup
+	pendingPlayground *playgroundState
 }
 
 func New(client *api.Client) *Desktop {
@@ -54,12 +60,12 @@ func New(client *api.Client) *Desktop {
 func NewWithSupervisor(client *api.Client, supervisor *runtimepkg.Supervisor, startupError error) *Desktop {
 	application := app.NewWithID("com.modelctl.desktop")
 	application.Settings().SetTheme(newTheme())
-	desktop := &Desktop{client: client, app: application, selectedPage: "models", supervisor: supervisor, startupError: startupError}
+	desktop := &Desktop{client: client, app: application, selectedPage: "models", supervisor: supervisor, startupError: startupError, language: application.Preferences().StringWithFallback("language", "zh")}
 	desktop.window = application.NewWindow("Modelctl")
 	desktop.window.Resize(fyne.NewSize(1120, 760))
 	desktop.page = container.NewVScroll(container.NewVBox())
 	desktop.window.SetContent(desktop.layout())
-	desktop.renderModels()
+	desktop.showPage("models")
 	return desktop
 }
 
@@ -78,27 +84,76 @@ func (d *Desktop) Run() {
 }
 
 func (d *Desktop) layout() fyne.CanvasObject {
-	d.status = widget.NewLabel("Connecting…")
-	refresh := widget.NewButton("Refresh", d.refresh)
-	header := container.NewBorder(nil, nil, widget.NewLabel("MODELCTL"), refresh, d.status)
+	statusText := d.t("Connecting…", "正在连接…")
+	if d.connectionError != "" {
+		statusText = d.connectionError
+	} else if d.modelsLoaded {
+		statusText = fmt.Sprintf(d.t("Connected · %d model(s) · %d ready instance(s)", "已连接 · %d 个模型 · %d 个就绪实例"), len(d.models), len(readyInstances(d.instances)))
+	}
+	d.status = widget.NewLabel(statusText)
+	refresh := widget.NewButton(d.t("Refresh", "刷新"), d.refresh)
+	language := widget.NewSelect([]string{"中文", "English"}, func(value string) {
+		selected := "zh"
+		if value == "English" {
+			selected = "en"
+		}
+		if selected == d.language {
+			return
+		}
+		d.language = selected
+		d.app.Preferences().SetString("language", selected)
+		if d.playgroundBody != nil {
+			state := &playgroundState{body: d.playgroundBody.Text, raw: d.playgroundRaw.Text, jsonMode: d.playgroundMode.Selected == "JSON"}
+			for _, row := range d.questionRows {
+				state.questions = append(state.questions, row.draft())
+			}
+			d.pendingPlayground = state
+		}
+		d.playground = nil
+		d.window.SetContent(d.layout())
+		d.showPage(d.selectedPage)
+	})
+	if d.language == "en" {
+		language.SetSelected("English")
+	} else {
+		language.SetSelected("中文")
+	}
+	header := container.NewBorder(nil, nil, widget.NewLabel("MODELCTL"), container.NewHBox(language, refresh), d.status)
+	d.navButtons = make(map[string]*widget.Button)
+	navButton := func(page, en, zh string) *widget.Button {
+		button := widget.NewButton(d.t(en, zh), func() { d.showPage(page) })
+		d.navButtons[page] = button
+		return button
+	}
 	nav := container.NewVBox(
-		widget.NewLabelWithStyle("LOCAL MODEL STUDIO", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(d.t("LOCAL MODEL STUDIO", "本地模型工作台"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewSeparator(),
-		widget.NewButton("Models", func() { d.showPage("models") }),
-		widget.NewButton("Running", func() { d.showPage("running") }),
-		widget.NewButton("Playground", func() { d.showPage("playground") }),
-		widget.NewButton("Capabilities", func() { d.showPage("capabilities") }),
-		widget.NewButton("Integration", func() { d.showPage("integration") }),
-		widget.NewButton("History", func() { d.showPage("history") }),
-		widget.NewButton("Settings", func() { d.showPage("settings") }),
+		navButton("models", "Models", "模型下载"),
+		navButton("running", "Running", "运行中的模型"),
+		navButton("playground", "Playground", "试用模型"),
+		navButton("capabilities", "Capabilities", "业务能力"),
+		navButton("integration", "Integration", "接入应用"),
+		navButton("history", "History", "调用记录"),
+		navButton("settings", "Settings", "设置"),
 		layout.NewSpacer(),
 		widget.NewLabel(d.client.BaseURL()),
 	)
-	return container.NewBorder(header, nil, nav, nil, d.page)
+	return container.NewBorder(container.NewPadded(header), nil, container.NewPadded(nav), nil, container.NewPadded(d.page))
 }
 
 func (d *Desktop) showPage(page string) {
+	if d.selectedPage != page {
+		d.page.Offset = fyne.NewPos(0, 0)
+	}
 	d.selectedPage = page
+	for name, button := range d.navButtons {
+		if name == page {
+			button.Importance = widget.HighImportance
+		} else {
+			button.Importance = widget.MediumImportance
+		}
+		button.Refresh()
+	}
 	switch page {
 	case "running":
 		d.renderRunning()
@@ -115,6 +170,13 @@ func (d *Desktop) showPage(page string) {
 	default:
 		d.renderModels()
 	}
+}
+
+func (d *Desktop) t(en, zh string) string {
+	if d.language == "en" {
+		return en
+	}
+	return zh
 }
 
 func (d *Desktop) refresh() {
@@ -166,7 +228,7 @@ func (d *Desktop) refresh() {
 			d.instances = instances.Items
 			d.capabilities = capabilities.Items
 			d.runs = runs.Items
-			d.status.SetText(fmt.Sprintf("Connected · %d model(s) · %d ready instance(s)", len(states), len(readyInstances(instances.Items))))
+			d.status.SetText(fmt.Sprintf(d.t("Connected · %d model(s) · %d ready instance(s)", "已连接 · %d 个模型 · %d 个就绪实例"), len(states), len(readyInstances(instances.Items))))
 			d.updateInstanceSelect()
 			d.showPage(d.selectedPage)
 		})
@@ -196,31 +258,31 @@ func firstSupported(profiles []api.Profile) string {
 }
 
 func (d *Desktop) renderModels() {
-	box := container.NewVBox(widget.NewLabelWithStyle("Models", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	box := container.NewVBox(widget.NewLabelWithStyle(d.t("Download and run models", "下载并加载模型"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 	if d.connectionError != "" {
 		message := widget.NewLabel(d.connectionError)
 		message.Wrapping = fyne.TextWrapWord
-		box.Add(widget.NewCard("Model service unavailable / 模型服务未就绪", "The download list needs the model service / 下载列表需要模型服务", container.NewVBox(
+		box.Add(widget.NewCard(d.t("Model service unavailable", "模型服务未就绪"), d.t("The download list needs the model service", "下载列表需要连接模型服务"), container.NewVBox(
 			message,
-			widget.NewButton("Retry connection / 重试连接", d.refresh),
+			widget.NewButton(d.t("Retry connection", "重试连接"), d.refresh),
 		)))
 	}
 	if len(d.models) == 0 {
 		if d.connectionError == "" && !d.modelsLoaded {
-			box.Add(widget.NewLabel("Connecting to the model service… / 正在连接模型服务…"))
+			box.Add(widget.NewLabel(d.t("Connecting to the model service…", "正在连接模型服务…")))
 		} else if d.connectionError == "" {
-			box.Add(widget.NewLabel("No models in the catalog / 模型目录为空，请检查服务端目录配置。"))
+			box.Add(widget.NewLabel(d.t("No models in the catalog. Check the service catalog configuration.", "模型目录为空，请检查服务端目录配置。")))
 		}
 	}
 	for index := range d.models {
 		box.Add(d.modelCard(index))
 	}
 	if len(d.models) > 0 && len(d.capabilities) == 0 {
-		box.Add(widget.NewCard("Next steps / 接下来怎么用", "Start with the model card above / 从上方模型卡片开始", container.NewVBox(
-			widget.NewLabel("1. Select a variant, then click Download model / 选择版本，点击 Download model 下载权重。"),
-			widget.NewLabel("2. Click Load & run, then open Playground / 点击 Load & run 加载，再到 Playground 试用。"),
-			widget.NewLabel("3. Open Capabilities to create a business API / 在 Capabilities 创建业务能力，供应用调用。"),
-			widget.NewButton("Open Capabilities / 创建业务能力", func() { d.showPage("capabilities") }),
+		box.Add(widget.NewCard(d.t("Next steps", "接下来怎么用"), d.t("Start with the model card above", "从上方模型卡片开始"), container.NewVBox(
+			widget.NewLabel(d.t("1. Select a variant and download its weights.", "1. 选择模型版本并下载权重。")),
+			widget.NewLabel(d.t("2. Load the model and try it in Playground.", "2. 加载模型，再到“试用模型”页体验。")),
+			widget.NewLabel(d.t("3. Publish a capability for your application to call.", "3. 发布业务能力，供你的应用调用。")),
+			widget.NewButton(d.t("Open Capabilities", "创建业务能力"), func() { d.showPage("capabilities") }),
 		)))
 	}
 	d.page.Content = box
@@ -233,20 +295,20 @@ func (d *Desktop) modelCard(index int) fyne.CanvasObject {
 	for _, variant := range model.detail.Variants {
 		variantIDs = append(variantIDs, variant.ID)
 	}
-	stateLabel := widget.NewLabel(modelStateText(model.summary, model.variant))
+	stateLabel := widget.NewLabel(d.modelStateLabel(model.summary, model.variant))
 	runningLabel := widget.NewLabel("")
 	updateRunning := func(variant string) {
 		runningLabel.SetText("")
 		for _, instance := range readyInstances(d.instances) {
 			if instance.Model.ID == model.summary.ID && instance.Model.Variant == variant {
-				runningLabel.SetText(fmt.Sprintf("Running on %s · %s", strings.ToUpper(instance.Device), instance.ID))
+				runningLabel.SetText(fmt.Sprintf(d.t("Running on %s · %s", "运行于 %s · %s"), strings.ToUpper(instance.Device), instance.ID))
 				return
 			}
 		}
 	}
 	variantSelect := widget.NewSelect(variantIDs, func(selected string) {
 		model.variant = selected
-		stateLabel.SetText(modelStateText(model.summary, selected))
+		stateLabel.SetText(d.modelStateLabel(model.summary, selected))
 		updateRunning(selected)
 	})
 	variantSelect.SetSelected(model.variant)
@@ -256,22 +318,30 @@ func (d *Desktop) modelCard(index int) fyne.CanvasObject {
 	progress := widget.NewLabel("")
 	var pull *widget.Button
 	var run *widget.Button
-	cancel := widget.NewButton("Cancel", nil)
+	cancel := widget.NewButton(d.t("Cancel", "取消"), nil)
 	cancel.Hide()
-	pull = widget.NewButton("Download model", func() { d.pull(model, progress, stateLabel, pull, run, cancel) })
-	run = widget.NewButton("Load & run", func() { d.run(model, progress, stateLabel, pull, run) })
+	pull = widget.NewButton(d.t("Download model", "下载模型"), func() { d.pull(model, progress, stateLabel, pull, run, cancel) })
+	run = widget.NewButton(d.t("Load & run", "加载并运行"), func() { d.run(model, progress, stateLabel, pull, run) })
+	pull.Importance = widget.HighImportance
 	content := container.NewVBox(
 		widget.NewLabel(fmt.Sprintf("%s · v%s", model.summary.ID, model.summary.Version)),
 		stateLabel,
 		runningLabel,
-		container.NewGridWithColumns(2, widget.NewLabel("Variant"), variantSelect, widget.NewLabel("Device"), profileSelect),
+		container.NewGridWithColumns(2, widget.NewLabel(d.t("Variant", "模型版本")), variantSelect, widget.NewLabel(d.t("Device", "运行设备")), profileSelect),
 		container.NewHBox(pull, run, cancel, progress),
 	)
 	name := model.detail.DisplayName
 	if name == "" {
 		name = model.summary.ID
 	}
-	return widget.NewCard(name, "Structured decision", content)
+	return widget.NewCard(name, d.t("Structured decision", "将资料转成结构化判断"), content)
+}
+
+func (d *Desktop) modelStateLabel(model api.ModelSummary, variant string) string {
+	if installedVariant(model, variant) {
+		return d.t("Downloaded · ready to load", "已下载，可加载")
+	}
+	return d.t("Not downloaded · download to continue", "尚未下载，先下载权重")
 }
 
 func modelStateText(model api.ModelSummary, variant string) string {
@@ -320,10 +390,13 @@ func (d *Desktop) pull(model *modelState, progress, stateLabel *widget.Label, pu
 				return
 			}
 			fyne.Do(func() {
-				progress.SetText(fmt.Sprintf("Downloading %d%%", progressPercent(task.Progress.BytesDone, task.Progress.BytesTotal)))
+				progress.SetText(fmt.Sprintf(d.t("Downloading %d%%", "下载中 %d%%"), progressPercent(task.Progress.BytesDone, task.Progress.BytesTotal)))
 			})
 			if task.Status == "succeeded" {
-				fyne.Do(func() { stateLabel.SetText("Downloaded · ready to load"); progress.SetText("Download verified") })
+				fyne.Do(func() {
+					stateLabel.SetText(d.t("Downloaded · ready to load", "已下载，可加载"))
+					progress.SetText(d.t("Download verified", "下载已校验"))
+				})
 				d.refresh()
 				return
 			}
@@ -346,7 +419,7 @@ func (d *Desktop) run(model *modelState, progress, stateLabel *widget.Label, pul
 	run.Disable()
 	go func() {
 		if !installedVariant(summary, variant) {
-			fyne.Do(func() { progress.SetText("Pulling before run…") })
+			fyne.Do(func() { progress.SetText(d.t("Pulling before run…", "运行前正在下载…")) })
 			if err := d.pullAndWait(summary, variant, func(text string) { fyne.Do(func() { progress.SetText(text) }) }); err != nil {
 				fyne.Do(func() { progress.SetText(err.Error()); pull.Enable(); run.Enable() })
 				return
@@ -361,7 +434,7 @@ func (d *Desktop) run(model *modelState, progress, stateLabel *widget.Label, pul
 				return
 			}
 			stateLabel.SetText(fmt.Sprintf("Running · %s · %s", instance.Device, instance.ID[:minInt(12, len(instance.ID))]))
-			progress.SetText("Ready")
+			progress.SetText(d.t("Ready", "已就绪"))
 		})
 		if err == nil {
 			d.refresh()
@@ -379,7 +452,7 @@ func (d *Desktop) pullAndWait(summary api.ModelSummary, variant string, report f
 		if taskErr != nil {
 			return taskErr
 		}
-		report(fmt.Sprintf("Downloading %d%%", progressPercent(task.Progress.BytesDone, task.Progress.BytesTotal)))
+		report(fmt.Sprintf(d.t("Downloading %d%%", "下载中 %d%%"), progressPercent(task.Progress.BytesDone, task.Progress.BytesTotal)))
 		if task.Status == "succeeded" {
 			return nil
 		}
@@ -395,17 +468,17 @@ func (d *Desktop) pullAndWait(summary api.ModelSummary, variant string, report f
 
 func (d *Desktop) renderRunning() {
 	active := activeInstances(d.instances)
-	box := container.NewVBox(widget.NewLabelWithStyle("Running", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	box := container.NewVBox(widget.NewLabelWithStyle(d.t("Running models", "运行中的模型"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 	if len(active) == 0 {
-		box.Add(widget.NewLabel("No running instances"))
+		box.Add(widget.NewLabel(d.t("No running instances. Load a model from Models first.", "还没有运行中的模型。请先到“模型下载”页加载。")))
 	}
 	for _, instance := range active {
 		instance := instance
 		status := widget.NewLabel("")
-		stop := widget.NewButton("Stop", nil)
+		stop := widget.NewButton(d.t("Stop", "停止"), nil)
 		stop.OnTapped = func() {
 			stop.Disable()
-			status.SetText("Stopping…")
+			status.SetText(d.t("Stopping…", "正在停止…"))
 			go func() {
 				_, err := d.client.StopInstance(instance.ID)
 				fyne.Do(func() {
@@ -414,7 +487,7 @@ func (d *Desktop) renderRunning() {
 						stop.Enable()
 						return
 					}
-					status.SetText("Stopped")
+					status.SetText(d.t("Stopped", "已停止"))
 				})
 				if err == nil {
 					d.refresh()

@@ -104,15 +104,47 @@ func TestBuildQuestionsSupportsMultipleTypes(t *testing.T) {
 	}
 }
 
-func TestBuildQuestionsRejectsDuplicateIDsAndMalformedOptions(t *testing.T) {
+func TestBuildQuestionsRejectsDuplicateIDsAndEmptyOptions(t *testing.T) {
 	cases := [][]questionDraft{
 		{{ID: "same", Type: "noul", Instructions: "One"}, {ID: "same", Type: "noul", Instructions: "Two"}},
-		{{ID: "choice", Type: "choice", Instructions: "Which?", Criteria: "missing separator"}},
+		{{ID: "choice", Type: "choice", Instructions: "Which?", Criteria: ""}},
 		{{ID: "score", Type: "score", Instructions: "How much?", Criteria: ""}},
 	}
 	for _, definitions := range cases {
 		if _, err := buildQuestions(definitions); err == nil {
 			t.Fatalf("expected error for %#v", definitions)
+		}
+	}
+}
+
+func TestBuildQuestionsAcceptsPlainLanguageOptions(t *testing.T) {
+	questions, err := buildQuestions([]questionDraft{{ID: "team", Type: "choice", Instructions: "Which team?", Criteria: "Billing\nSupport"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	choices := questions["team"].Criteria.(map[string]string)
+	if choices["option_1"] != "Billing" || choices["option_2"] != "Support" {
+		t.Fatalf("choices = %#v", choices)
+	}
+}
+
+func TestCapabilityQuestionAcceptsPlainLanguageOptions(t *testing.T) {
+	questions, err := buildCapabilityQuestion("team", "choice", "Which team?", "Billing\nSupport")
+	if err != nil {
+		t.Fatal(err)
+	}
+	choices := questions["team"].Criteria.(map[string]string)
+	if choices["option_1"] != "Billing" || choices["option_2"] != "Support" {
+		t.Fatalf("choices = %#v", choices)
+	}
+}
+
+func TestPlaygroundResultUsesBusinessQuestionAndReadableProbability(t *testing.T) {
+	result := api.SystemOneResponse{Answers: map[string]api.Answer{"refund": {Type: "noul", Value: 0.92}}}
+	got := formatPlaygroundResult(result, "zh", map[string]string{"refund": "客户是否要求退款？"})
+	for _, expected := range []string{"客户是否要求退款？", "成立概率", "92.0%"} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("result %q lacks %q", got, expected)
 		}
 	}
 }

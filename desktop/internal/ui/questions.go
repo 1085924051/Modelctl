@@ -123,8 +123,11 @@ func buildQuestions(drafts []questionDraft) (map[string]api.Question, error) {
 				}
 				key, value, ok := strings.Cut(line, ":")
 				key, value = strings.TrimSpace(key), strings.TrimSpace(value)
-				if !ok || key == "" || value == "" {
-					return nil, fmt.Errorf("%s: use key: description for each choice", id)
+				if !ok {
+					key, value = fmt.Sprintf("option_%d", len(choices)+1), line
+				}
+				if key == "" || value == "" {
+					return nil, fmt.Errorf("%s: each option needs a name", id)
 				}
 				if _, exists := choices[key]; exists {
 					return nil, fmt.Errorf("%s: duplicate choice %s", id, key)

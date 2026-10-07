@@ -12,20 +12,20 @@ import (
 
 func (d *Desktop) renderHistory() {
 	box := container.NewVBox(
-		widget.NewLabelWithStyle("Run history", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel("Replayable local records keep the capability version, model instance, input and structured answer together."),
+		widget.NewLabelWithStyle(d.t("Run history", "调用记录"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel(d.t("Replayable local records keep the capability version, model instance, input and structured answer together.", "本地记录保留能力版本、模型实例、输入和结构化结果，便于复查。")),
 	)
 	if len(d.runs) == 0 {
-		box.Add(widget.NewLabel("No runs yet. Test a published capability first."))
+		box.Add(widget.NewLabel(d.t("No runs yet. Test a published capability first.", "还没有调用记录。请先测试已发布的业务能力。")))
 	} else {
 		for _, run := range d.runs {
 			run := run
 			raw, _ := json.MarshalIndent(run.Response, "", "  ")
 			status := widget.NewLabel("")
-			rerun := widget.NewButton("Run again", nil)
+			rerun := widget.NewButton(d.t("Run again", "再次运行"), nil)
 			rerun.OnTapped = func() {
 				rerun.Disable()
-				status.SetText("Running...")
+				status.SetText(d.t("Running...", "正在运行…"))
 				go func() {
 					result, err := d.client.InvokeCapability(run.CapabilityID, api.CapabilityInvokeRequest{Input: run.Input, Metadata: run.Metadata}, run.CapabilityVersion)
 					fyne.Do(func() {
@@ -34,7 +34,7 @@ func (d *Desktop) renderHistory() {
 							status.SetText(err.Error())
 							return
 						}
-						status.SetText("Replayed as " + result.RunID)
+						status.SetText(d.t("Replayed as ", "新运行记录：") + result.RunID)
 						d.refresh()
 					})
 				}()
@@ -43,12 +43,12 @@ func (d *Desktop) renderHistory() {
 				run.CapabilityID+" · "+run.CapabilityVersion,
 				run.CreatedAt,
 				container.NewVBox(
-					widget.NewLabel(fmt.Sprintf("Run %s · instance %s", run.ID, run.InstanceID)),
-					widget.NewLabel("Input: "+runInputText(run.Input)),
+					widget.NewLabel(fmt.Sprintf(d.t("Run %s · instance %s", "记录 %s · 实例 %s"), run.ID, run.InstanceID)),
+					widget.NewLabel(d.t("Input: ", "输入：")+runInputText(run.Input)),
 					metadataLabel(run.Metadata),
 					container.NewHBox(rerun, status),
 					widget.NewRichTextFromMarkdown(formatResult(run.Response)),
-					widget.NewAccordion(widget.NewAccordionItem("Raw result", widget.NewLabel(string(raw)))),
+					widget.NewAccordion(widget.NewAccordionItem(d.t("Raw result", "原始结果"), widget.NewLabel(string(raw)))),
 				),
 			))
 		}

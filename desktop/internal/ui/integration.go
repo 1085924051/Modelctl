@@ -22,13 +22,13 @@ type capabilityVersionSelection struct {
 // becomes a copyable, versioned contract for a business service.
 func (d *Desktop) renderIntegration() {
 	box := container.NewVBox(
-		widget.NewLabelWithStyle("Integration", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel("Connect your order system, helpdesk, ERP, or application to a published capability. The integration contract hides model and Laya/Jev details."),
+		widget.NewLabelWithStyle(d.t("Integration", "接入应用"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel(d.t("Connect your order system, helpdesk, ERP, or application to a published capability. The integration contract hides model and Laya/Jev details.", "将订单系统、客服系统、ERP 或其他应用连接到已发布的业务能力。应用无需了解模型或 Laya/Jev 协议。")),
 	)
 	if len(d.capabilities) == 0 {
-		box.Add(widget.NewCard("No published capabilities", "Publish one first", container.NewVBox(
-			widget.NewLabel("Create and test a capability in Capabilities, then return here to copy the production request."),
-			widget.NewButton("Open Capabilities", func() { d.showPage("capabilities") }),
+		box.Add(widget.NewCard(d.t("No published capabilities", "还没有已发布的业务能力"), d.t("Publish one first", "请先发布能力"), container.NewVBox(
+			widget.NewLabel(d.t("Create and test a capability in Capabilities, then return here to copy the production request.", "先在“业务能力”页创建并测试，随后回来复制应用调用示例。")),
+			widget.NewButton(d.t("Open Capabilities", "打开业务能力"), func() { d.showPage("capabilities") }),
 		)))
 		d.page.Content = box
 		d.page.Refresh()
@@ -48,11 +48,11 @@ func (d *Desktop) renderIntegration() {
 	selectCapability.SetSelected(labels[0])
 	status := widget.NewLabel("")
 	detail := container.NewVBox()
-	box.Add(widget.NewCard("Choose a capability", "Production callers should pin a version", container.NewVBox(selectCapability, status)))
+	box.Add(widget.NewCard(d.t("Choose a capability", "选择业务能力"), d.t("Production callers should pin a version", "生产环境建议固定版本"), container.NewVBox(selectCapability, status)))
 	box.Add(detail)
 
 	load := func(selection capabilityVersionSelection) {
-		status.SetText("Loading integration contract…")
+		status.SetText(d.t("Loading integration contract…", "正在加载接入说明…"))
 		detail.RemoveAll()
 		go func() {
 			integration, err := d.client.CapabilityIntegration(selection.ID, selection.Version)
@@ -61,7 +61,7 @@ func (d *Desktop) renderIntegration() {
 					status.SetText(err.Error())
 					return
 				}
-				status.SetText("Contract ready · pin " + selection.ID + "@" + selection.Version + " in production")
+				status.SetText(d.t("Contract ready · pin ", "接口已就绪 · 生产环境请固定 ") + selection.ID + "@" + selection.Version)
 				populateIntegrationDetail(d, detail, integration)
 				d.page.Refresh()
 			})

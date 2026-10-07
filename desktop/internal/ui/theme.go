@@ -20,7 +20,9 @@ func (t modelTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) c
 	case theme.ColorNameHover:
 		return color.NRGBA{R: 230, G: 243, B: 237, A: 255}
 	}
-	return t.Theme.Color(name, variant)
+	// Keep foreground, input and disabled colors in the same light palette as
+	// the customized background, even when the OS prefers dark mode.
+	return t.Theme.Color(name, theme.VariantLight)
 }
 
 func (t modelTheme) Size(name fyne.ThemeSizeName) float32 {
