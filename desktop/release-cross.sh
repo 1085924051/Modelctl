@@ -52,6 +52,9 @@ for target in windows-amd64 linux-amd64; do
   node "$ROOT/runtime/tests/verify-runtime.mjs" "$DIST/runtime/$target"
 done
 
+# actions/download-artifact does not preserve Unix executable modes.
+chmod 755 "$DIST/runtime/linux-amd64/node/bin/node" "$DIST/runtime/linux-amd64/python/bin/python"
+
 WINDOWS_STAGE="$STAGE/Modelctl-Windows-x64"
 mkdir -p "$WINDOWS_STAGE"
 unzip -q -o "$ROOT/fyne-cross/dist/windows-amd64/Modelctl.zip" -d "$WINDOWS_STAGE"

@@ -189,6 +189,10 @@ jobs:
         with:
           name: modelctl-runtime-linux-amd64
           path: desktop/dist/runtime/linux-amd64
+      - name: Smoke downloaded Linux runtime
+        run: |
+          chmod 755 desktop/dist/runtime/linux-amd64/node/bin/node desktop/dist/runtime/linux-amd64/python/bin/python
+          bash ./desktop/tests/smoke-runtime.sh desktop/dist/runtime/linux-amd64 11436
       - name: Build Windows and Linux packages
         env:
           MODELCTL_DESKTOP_VERSION: ${{ inputs.version || '0.1.0' }}
@@ -215,6 +219,10 @@ jobs:
         with:
           name: modelctl-runtime-darwin-arm64
           path: desktop/dist/runtime/macos-arm64
+      - name: Smoke downloaded macOS runtime
+        run: |
+          chmod 755 desktop/dist/runtime/macos-arm64/node/bin/node desktop/dist/runtime/macos-arm64/python/bin/python
+          bash ./desktop/tests/smoke-runtime.sh desktop/dist/runtime/macos-arm64 11436
       - name: Build macOS DMG and ZIP
         env:
           MODELCTL_DESKTOP_VERSION: ${{ inputs.version || '0.1.0' }}

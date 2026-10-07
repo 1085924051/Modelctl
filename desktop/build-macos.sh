@@ -17,6 +17,7 @@ if [ ! -f "$RUNTIME_ROOT/runtime-manifest.json" ]; then
 fi
 "$ROOT/runtime/assert-layout.sh" "$RUNTIME_ROOT" darwin-arm64
 node "$ROOT/runtime/tests/verify-runtime.mjs" "$RUNTIME_ROOT"
+chmod 755 "$RUNTIME_ROOT/node/bin/node" "$RUNTIME_ROOT/python/bin/python"
 if [ ! -f "$ROOT/Icon.png" ]; then (cd "$ROOT" && go run ./tools/generate_icon.go); fi
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
