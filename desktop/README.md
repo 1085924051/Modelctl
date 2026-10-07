@@ -2,6 +2,26 @@
 
 Native Go/Fyne macOS client for the local Modelctl daemon.
 
+## Windows first run / Windows 首次使用
+
+Download the `modelctl-desktop-windows-linux-self-contained` artifact from a
+successful Desktop workflow run. Extract the artifact, then extract
+`Modelctl-windows-x64-v*.zip` into its own folder. Keep `Modelctl.exe` and the
+`runtime` directory together, and start `Modelctl.exe`.
+
+In the **Models** page, wait for the model card to appear. Select a variant
+(start with `english`), click **Download model**, and wait for **Download
+verified**. The model weights are downloaded separately from the app. Click
+**Load & run**, then open **Playground** to try one request. To give an
+application a stable API, open **Capabilities**, choose a starter template,
+test it, and publish it; the **Integration** page has the request example.
+
+Windows 首次使用：在 **Models** 页面选择 `english`，点击 **Download model** 下载并校验模型权重；
+完成后点击 **Load & run**，再到 **Playground** 试用。要让业务程序调用，进入
+**Capabilities** 创建并测试能力，然后在 **Integration** 复制接口示例。
+如果 Models 页面显示“模型服务未就绪”，检查完整解压后 `Modelctl.exe` 旁是否保留
+`runtime` 目录，再点击“重试连接”。
+
 ## Run
 
 ```bash

@@ -25,24 +25,26 @@ type modelState struct {
 }
 
 type Desktop struct {
-	client         *api.Client
-	app            fyne.App
-	window         fyne.Window
-	page           *container.Scroll
-	status         *widget.Label
-	models         []modelState
-	instances      []api.Instance
-	capabilities   []api.Capability
-	runs           []api.Run
-	selectedPage   string
-	refreshMu      sync.Mutex
-	playground     fyne.CanvasObject
-	instanceSelect *widget.Select
-	questionRows   []*questionEditor
-	questionList   *fyne.Container
-	result         *widget.RichText
-	supervisor     *runtimepkg.Supervisor
-	startupError   error
+	client          *api.Client
+	app             fyne.App
+	window          fyne.Window
+	page            *container.Scroll
+	status          *widget.Label
+	models          []modelState
+	instances       []api.Instance
+	capabilities    []api.Capability
+	runs            []api.Run
+	selectedPage    string
+	refreshMu       sync.Mutex
+	playground      fyne.CanvasObject
+	instanceSelect  *widget.Select
+	questionRows    []*questionEditor
+	questionList    *fyne.Container
+	result          *widget.RichText
+	supervisor      *runtimepkg.Supervisor
+	startupError    error
+	connectionError string
+	modelsLoaded    bool
 }
 
 func New(client *api.Client) *Desktop {
@@ -63,7 +65,9 @@ func NewWithSupervisor(client *api.Client, supervisor *runtimepkg.Supervisor, st
 
 func (d *Desktop) Run() {
 	if d.startupError != nil {
-		d.status.SetText("Runtime unavailable: " + d.startupError.Error())
+		d.connectionError = "Runtime unavailable: " + d.startupError.Error()
+		d.status.SetText(d.connectionError)
+		d.renderModels()
 	} else {
 		d.refresh()
 	}
@@ -120,17 +124,17 @@ func (d *Desktop) refresh() {
 	go func() {
 		defer d.refreshMu.Unlock()
 		if err := d.client.Health(); err != nil {
-			fyne.Do(func() { d.status.SetText(formatConnectionError(d.client.BaseURL(), err)) })
+			fyne.Do(func() { d.showConnectionError(formatConnectionError(d.client.BaseURL(), err)) })
 			return
 		}
 		models, err := d.client.Models()
 		if err != nil {
-			fyne.Do(func() { d.status.SetText("Models unavailable: " + err.Error()) })
+			fyne.Do(func() { d.showConnectionError("Models unavailable: " + err.Error()) })
 			return
 		}
 		instances, err := d.client.Instances()
 		if err != nil {
-			fyne.Do(func() { d.status.SetText("Instances unavailable: " + err.Error()) })
+			fyne.Do(func() { d.showConnectionError("Instances unavailable: " + err.Error()) })
 			return
 		}
 		capabilities, capabilityErr := d.client.Capabilities()
@@ -142,14 +146,22 @@ func (d *Desktop) refresh() {
 			runs.Items = nil
 		}
 		states := make([]modelState, 0, len(models.Items))
+		var modelDetailError error
 		for _, summary := range models.Items {
 			detail, detailErr := d.client.ModelDetail(summary.ID)
 			if detailErr != nil {
+				modelDetailError = detailErr
 				continue
 			}
 			states = append(states, modelState{summary: summary, detail: detail, variant: chooseVariant(detail.Variants, ""), profile: firstSupported(detail.Preflight.Profiles)})
 		}
+		if len(models.Items) > 0 && len(states) == 0 {
+			fyne.Do(func() { d.showConnectionError("Model details unavailable: " + modelDetailError.Error()) })
+			return
+		}
 		fyne.Do(func() {
+			d.connectionError = ""
+			d.modelsLoaded = true
 			d.models = mergeModelStates(d.models, states)
 			d.instances = instances.Items
 			d.capabilities = capabilities.Items
@@ -159,6 +171,14 @@ func (d *Desktop) refresh() {
 			d.showPage(d.selectedPage)
 		})
 	}()
+}
+
+func (d *Desktop) showConnectionError(message string) {
+	d.connectionError = message
+	d.status.SetText(message)
+	if d.selectedPage == "models" {
+		d.renderModels()
+	}
 }
 
 func firstSupported(profiles []api.Profile) string {
@@ -177,19 +197,31 @@ func firstSupported(profiles []api.Profile) string {
 
 func (d *Desktop) renderModels() {
 	box := container.NewVBox(widget.NewLabelWithStyle("Models", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-	if len(d.capabilities) == 0 {
-		box.Add(widget.NewCard("Start with a business capability", "Three steps from installation to integration", container.NewVBox(
-			widget.NewLabel("1  Download model · verify the checkpoint"),
-			widget.NewLabel("2  Load & run · choose CPU, MPS, or CUDA when available"),
-			widget.NewLabel("3  Capabilities · publish a stable contract for your application"),
-			widget.NewButton("Open Capabilities", func() { d.showPage("capabilities") }),
+	if d.connectionError != "" {
+		message := widget.NewLabel(d.connectionError)
+		message.Wrapping = fyne.TextWrapWord
+		box.Add(widget.NewCard("Model service unavailable / 模型服务未就绪", "The download list needs the model service / 下载列表需要模型服务", container.NewVBox(
+			message,
+			widget.NewButton("Retry connection / 重试连接", d.refresh),
 		)))
 	}
 	if len(d.models) == 0 {
-		box.Add(widget.NewLabel("No models available"))
+		if d.connectionError == "" && !d.modelsLoaded {
+			box.Add(widget.NewLabel("Connecting to the model service… / 正在连接模型服务…"))
+		} else if d.connectionError == "" {
+			box.Add(widget.NewLabel("No models in the catalog / 模型目录为空，请检查服务端目录配置。"))
+		}
 	}
 	for index := range d.models {
 		box.Add(d.modelCard(index))
+	}
+	if len(d.models) > 0 && len(d.capabilities) == 0 {
+		box.Add(widget.NewCard("Next steps / 接下来怎么用", "Start with the model card above / 从上方模型卡片开始", container.NewVBox(
+			widget.NewLabel("1. Select a variant, then click Download model / 选择版本，点击 Download model 下载权重。"),
+			widget.NewLabel("2. Click Load & run, then open Playground / 点击 Load & run 加载，再到 Playground 试用。"),
+			widget.NewLabel("3. Open Capabilities to create a business API / 在 Capabilities 创建业务能力，供应用调用。"),
+			widget.NewButton("Open Capabilities / 创建业务能力", func() { d.showPage("capabilities") }),
+		)))
 	}
 	d.page.Content = box
 	d.page.Refresh()
