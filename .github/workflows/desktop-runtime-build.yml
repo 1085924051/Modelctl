@@ -153,6 +153,7 @@ jobs:
         with:
           name: modelctl-runtime-${{ matrix.target }}
           path: desktop/dist/runtime/${{ matrix.target }}
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
       - name: Run runtime smoke test on Unix

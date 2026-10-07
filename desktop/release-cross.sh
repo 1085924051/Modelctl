@@ -49,6 +49,7 @@ for target in windows-amd64 linux-amd64; do
     exit 2
   fi
   "$ROOT/runtime/assert-layout.sh" "$DIST/runtime/$target" "$target"
+  node "$ROOT/runtime/tests/verify-runtime.mjs" "$DIST/runtime/$target"
 done
 
 WINDOWS_STAGE="$STAGE/Modelctl-Windows-x64"
