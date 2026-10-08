@@ -198,11 +198,40 @@ jobs:
           MODELCTL_DESKTOP_VERSION: ${{ inputs.version || '0.1.0' }}
           MODELCTL_RUNTIME_ROOT: ${{ github.workspace }}/desktop/dist/runtime
         run: ./desktop/release-cross.sh
-      - uses: actions/upload-artifact@v4
+      # A single combined artifact exceeded 6 GB. Keep each download scoped
+      # to the user's OS and, on Linux, to the chosen package format.
+      - name: Upload Windows desktop
+        uses: actions/upload-artifact@v4
         with:
-          name: modelctl-desktop-windows-linux-self-contained
-          path: desktop/dist/release/*
+          name: modelctl-desktop-windows-x64
+          path: |
+            desktop/dist/release/Modelctl-windows-x64-*.zip
+            desktop/dist/release/SHA256SUMS
+            desktop/dist/release/README.txt
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: modelctl-desktop-linux-appimage-x86_64
+          path: |
+            desktop/dist/release/Modelctl-linux-x86_64-*.AppImage
+            desktop/dist/release/SHA256SUMS
+            desktop/dist/release/README.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Upload Linux tar archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: modelctl-desktop-linux-tar-x86_64
+          path: |
+            desktop/dist/release/Modelctl-linux-x86_64-*.tar.xz
+            desktop/dist/release/SHA256SUMS
+            desktop/dist/release/README.txt
+          if-no-files-found: error
+          compression-level: 0
           retention-days: 30
 
   package-macos:

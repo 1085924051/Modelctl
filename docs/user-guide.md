@@ -4,13 +4,15 @@ Modelctl 帮你在本机下载和运行 Laya 模型，再把模型包装成可�
 
 ## 安装与首次启动
 
-从 GitHub Actions 中选择**成功完成**、提交版本为当前目标版本的 `Desktop self-contained runtimes` 构建，下载对应桌面 artifact。桌面 artifact 与 `modelctl-runtime-*` 是不同的：后者只是运行时，不是可直接打开的客户端。
+从 GitHub Actions 中选择**成功完成**、提交版本为当前目标版本的 `Desktop self-contained runtimes` 构建，登录 GitHub 后下载对应桌面 artifact。桌面 artifact 与 `modelctl-runtime-*` 是不同的：后者只是运行时，不是可直接打开的客户端。**旧构建中的 `modelctl-desktop-windows-linux-self-contained` 同时包含 Windows 与两种 Linux 安装包，约 6 GB；Windows 用户不要再下载这个合并包。**
 
 | 系统 | 选择的桌面 artifact | 打开方式 |
 | --- | --- | --- |
-| Windows x64 | `modelctl-desktop-windows-linux-self-contained` 内的 `Modelctl-windows-x64-v*.zip` | 解压两次，保持 `Modelctl.exe` 与 `runtime` 文件夹同级，运行 `Modelctl.exe` |
-| Linux x86_64 | 同一 artifact 内的 `.AppImage` 或 `.tar.xz` | AppImage 加执行权限后运行；或解压 tar.xz 后按随包 README 启动 |
+| Windows x64 | `modelctl-desktop-windows-x64` 内的 `Modelctl-windows-x64-v*.zip` | 解压两次，保持 `Modelctl.exe` 与 `runtime` 文件夹同级，运行 `Modelctl.exe` |
+| Linux x86_64 | `modelctl-desktop-linux-appimage-x86_64` 或 `modelctl-desktop-linux-tar-x86_64` | AppImage 加执行权限后运行；或解压 tar.xz 后按随包 README 启动 |
 | macOS Apple Silicon | `modelctl-desktop-macos-self-contained` 内的 `.dmg` 或 `.zip` | 从 DMG/ZIP 打开 `Modelctl.app`；当前包为 ad-hoc 签名 |
+
+如果浏览器下载 Actions artifact 时中断，先确认已登录 GitHub、磁盘有足够空间，并只选自己的平台包。Windows 用户也可安装 GitHub CLI 后在 PowerShell 中执行 `gh auth login`，再运行 `gh run download <构建编号> -R 1085924051/Modelctl -n modelctl-desktop-windows-x64 -D .\Modelctl-download`。其中 `<构建编号>` 是 Actions 页面网址末尾的数字。Actions artifact 下载后外面还有一层 ZIP，里面的 `Modelctl-windows-x64-v*.zip` 才是客户端安装包；需要解压两次。
 
 程序默认在 `http://127.0.0.1:11435` 启动本机模型服务。首次启动时 Models 页面会先显示“正在连接模型服务”。如果出现“模型服务未就绪”，先检查完整解压、`runtime` 目录是否在正确位置，然后点击“重试连接”。不要只复制单独的可执行文件。
 
